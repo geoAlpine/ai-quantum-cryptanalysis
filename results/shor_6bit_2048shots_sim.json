@@ -1,0 +1,23 @@
+{
+  "mode": "shor",
+  "bit_length": 6,
+  "p": 43,
+  "n": 31,
+  "G": [
+    34,
+    3
+  ],
+  "Q": [
+    21,
+    25
+  ],
+  "expected_d": 18,
+  "recovered_d": 18,
+  "success": true,
+  "shots": 2048,
+  "unique_outcomes": 1427,
+  "qubits": 15,
+  "oracle": "dense",
+  "num_counting": 5,
+  "circuit_depth": 13
+}

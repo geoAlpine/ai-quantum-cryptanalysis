@@ -1,0 +1,13 @@
+{
+  "n_bits": 3,
+  "true_k": 5,
+  "shots": 4096,
+  "success_probability": 0.120849609375,
+  "random_expected_success": 0.125,
+  "success_ratio_vs_random": 0.966796875,
+  "chi2_statistic": 12.20703125,
+  "chi2_p_value": 0.09395281520838739,
+  "kl_divergence_from_uniform": 0.0029525954649313128,
+  "total_variation_distance": 0.0322265625,
+  "has_quantum_advantage": false
+}

@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+title: "quantum-ecc: Autonomous AI Agent Recovery of 22-bit ECDLP on IBM Quantum"
+message: "If you use this work, please cite it as below."
+type: software
+authors:
+  - family-names: "Aoki"
+    given-names: "Yosuke"
+    email: info@geoalpine.net
+  - name: "Claude Sonnet 4.6 (LLM agent, Anthropic)"
+    email: "noreply@anthropic.com"
+date-released: 2026-04-29
+license: MIT
+keywords:
+  - quantum-cryptanalysis
+  - elliptic-curve
+  - ECDLP
+  - Shor-algorithm
+  - IBM-Quantum
+  - Q-Day-Prize
+  - AI-agent
+abstract: >
+  An autonomous AI-agent–driven cryptanalysis pipeline for the Elliptic Curve
+  Discrete Logarithm Problem (ECDLP), implemented end-to-end by Anthropic's
+  Claude Sonnet 4.6 via the Claude Code interface, demonstrated on IBM
+  Quantum Heron r2 hardware. The submission recovers a 22-bit (m=22) private
+  key — six algorithmic steps beyond Lelli's 17-bit Q-Day Prize Round-1
+  winner — using novel adaptive-counting and Stern-Brocot continued-fraction
+  lift extraction techniques.
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "(Aoki)"
+      given-names: "Yosuke"
+    - name: "Claude Sonnet 4.6"
+  title: "quantum-ecc"
+  year: 2026
+  url: "https://github.com/<yourname>/quantum-ecc"

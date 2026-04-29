@@ -1,0 +1,31 @@
+{
+  "mode": "shor",
+  "bit_length": 19,
+  "m": 19,
+  "p": 262153,
+  "n": 262567,
+  "G": [
+    44507,
+    141754
+  ],
+  "Q": [
+    253977,
+    23539
+  ],
+  "expected_d": 36124,
+  "recovered_d": null,
+  "success": false,
+  "shots": 5000,
+  "unique_outcomes": 5000,
+  "verified_shots": 0,
+  "true_d_votes": 0,
+  "p_value_vs_random": 1,
+  "bit_marginal_mean": 0.43670416666666667,
+  "bit_marginal_std": 0.1276739009454904,
+  "backend": "ibm_fez",
+  "job_id": "d7o2sou2jamc73bp47ng",
+  "t": 14,
+  "qubits": 71,
+  "transpiled_depth": 276966,
+  "transpiled_2Q": 121180
+}

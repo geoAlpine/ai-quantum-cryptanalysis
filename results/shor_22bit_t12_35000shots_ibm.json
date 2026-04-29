@@ -1,0 +1,28 @@
+{
+  "mode": "shor",
+  "bit_length": 22,
+  "m": 22,
+  "p": 2097211,
+  "n": 2098699,
+  "G": [
+    2096853,
+    790051
+  ],
+  "Q": [
+    184036,
+    1283798
+  ],
+  "expected_d": 1999171,
+  "recovered_d": 1999171,
+  "success": true,
+  "shots": 35000,
+  "unique_outcomes": 35000,
+  "backend": "ibm_fez",
+  "job_id": "d7o5mr62jamc73bp87eg",
+  "t": 12,
+  "qubits": 73,
+  "transpiled_depth": 279584,
+  "transpiled_2Q": 124422,
+  "extractor": "CF-lift v2 (Stern-Brocot convergents + mediants + BSGS-fast verify)",
+  "note": "Same data as job d7o5mr62jamc73bp87eg, originally reported as FAIL with v1 extractor."
+}

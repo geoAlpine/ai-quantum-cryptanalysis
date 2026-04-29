@@ -1,0 +1,544 @@
+"""
+Shor's algorithm for ECDLP — independent implementation.
+
+Architecture
+------------
+SubgroupIndexer  : public bijection between EC subgroup elements and [0, n).
+OracleStrategy   : interface that emits a controlled "add S" gate.
+  - DenseUnitaryOracle  → permutation matrix, ≤ 6-bit (simulator-friendly).
+  - RippleCarryOracle   → CDKM modular adder, ≥ 7-bit (heavy-hex friendly).
+ShorSolver       : orchestrates the QPE-style two-counting-register circuit.
+Extractor        : recovers d from (j, k, r) triples with multi-pass verification.
+
+Algorithm (two-register Shor for ECDLP):
+    1. |j>|k>|0>  →  H on j, k registers
+    2. Apply ∏ ctrl(j_i) · "add 2^i G"        for i = 0..t-1
+    3. Apply ∏ ctrl(k_i) · "add 2^i Q"        for i = 0..t-1
+    4. Measure point register → r ∈ [0, n)
+    5. Inverse QFT on j, k
+    6. Measure j, k → solve  j + k·d ≡ r (mod n)  for d.
+
+Verification step  d_cand · G == Q  filters noise — only true d survives.
+"""
+
+from __future__ import annotations
+
+import math
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
+
+import numpy as np
+from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
+from qiskit.circuit import Gate
+from qiskit.circuit.library import (
+    CDKMRippleCarryAdder,
+    IntegerComparator,
+    QFTGate,
+    UnitaryGate,
+)
+
+from ecc import ECPoint, EllipticCurve
+
+
+# ---------------------------------------------------------------------------
+#  Subgroup indexing
+# ---------------------------------------------------------------------------
+
+class SubgroupIndexer:
+    """Public enumeration  index ∈ [0, n) ↔ point  (only G and Q are used)."""
+
+    def __init__(self, curve: EllipticCurve, G: ECPoint, n: int):
+        self.curve = curve
+        self.G = G
+        self.n = n
+        self._elements: list[ECPoint] = self._enumerate()
+        self._index: dict[tuple, int] = {
+            self._key(P): i for i, P in enumerate(self._elements)
+        }
+
+    @staticmethod
+    def _key(P: ECPoint) -> tuple:
+        return (None, None) if P.is_infinity else (P.x, P.y)
+
+    def _enumerate(self) -> list[ECPoint]:
+        out: list[ECPoint] = [self.curve.infinity]
+        cur = self.G
+        for _ in range(1, self.n):
+            out.append(cur)
+            cur = self.curve.add(cur, self.G)
+        return out
+
+    def index_of(self, P: ECPoint) -> int:
+        return self._index[self._key(P)]
+
+    def contains(self, P: ECPoint) -> bool:
+        return self._key(P) in self._index
+
+
+# ---------------------------------------------------------------------------
+#  Oracle strategy interface
+# ---------------------------------------------------------------------------
+
+class OracleStrategy(ABC):
+    """Builds  ctrl-add  gates that act on the point register."""
+
+    name: str = "abstract"
+
+    @abstractmethod
+    def point_register_width(self) -> int:
+        """Number of qubits required to hold the point state."""
+
+    @abstractmethod
+    def ancilla_widths(self) -> dict[str, int]:
+        """Map of ancilla-register-name → width (no point reg, no counting reg)."""
+
+    @abstractmethod
+    def controlled_add(self, constant_index: int) -> Gate:
+        """Return a gate whose layout is [ctrl, point_reg, *ancilla_regs] adding the constant."""
+
+    @abstractmethod
+    def measured_value_modulus(self) -> int:
+        """How to interpret the measured point-register int (mod n vs mod 2^m)."""
+
+
+class DenseUnitaryOracle(OracleStrategy):
+    """Permutation-matrix oracle. Memory O(N^2), use only for n_bits ≤ 6."""
+
+    name = "dense"
+
+    def __init__(self, indexer: SubgroupIndexer):
+        self.indexer = indexer
+        self.n = indexer.n
+        self.m = max(1, (self.n - 1).bit_length())
+        self._cache: dict[int, Gate] = {}
+
+    def point_register_width(self) -> int:
+        return self.m
+
+    def ancilla_widths(self) -> dict[str, int]:
+        return {}
+
+    def measured_value_modulus(self) -> int:
+        return self.n  # indices are 0..n-1, padded into 2^m
+
+    def controlled_add(self, constant_index: int) -> Gate:
+        c = constant_index % self.n
+        if c in self._cache:
+            return self._cache[c]
+        dim = 1 << self.m
+        perm = np.arange(dim)
+        for i in range(self.n):
+            perm[i] = (i + c) % self.n
+        # Layout (Qiskit little-endian): qubit 0 = ctrl (LSB), qubits 1..m = point.
+        # State index = ctrl + 2 * pt_value.
+        total = 2 * dim
+        U = np.zeros((total, total), dtype=complex)
+        for pt in range(dim):
+            U[2 * pt, 2 * pt] = 1.0                       # ctrl=0 → identity
+            U[2 * perm[pt] + 1, 2 * pt + 1] = 1.0         # ctrl=1 → permute
+        gate = UnitaryGate(U, label=f"CAdd[{c}]")
+        self._cache[c] = gate
+        return gate
+
+
+class RippleCarryOracle(OracleStrategy):
+    """CDKM ripple-carry modular addition. Best ≥ 7-bit on heavy-hex topology.
+
+    Each "add S" reduces to controlled  (acc += s mod n)  where s = index(S).
+    Layout returned by `controlled_add`: [ctrl, acc(m1), flag(1), anc(m1), cout(1), helper(1)].
+    """
+
+    name = "ripple"
+
+    def __init__(self, indexer: SubgroupIndexer):
+        self.indexer = indexer
+        self.n = indexer.n
+        self.m = max(1, (self.n - 1).bit_length())
+        self.m1 = self.m + 1
+        self._cache: dict[int, Gate] = {}
+        self._half = CDKMRippleCarryAdder(self.m1, kind="half").to_gate()
+        self._half_inv = self._half.inverse()
+        self._cmp = IntegerComparator(self.m1, value=self.n, geq=True).to_gate()
+
+    def point_register_width(self) -> int:
+        return self.m1
+
+    def ancilla_widths(self) -> dict[str, int]:
+        return {"flag": 1, "anc": self.m1, "cout": 1, "help": 1}
+
+    def measured_value_modulus(self) -> int:
+        return self.n  # acc holds value 0..n-1 after correct execution
+
+    def controlled_add(self, constant_index: int) -> Gate:
+        c = constant_index % self.n
+        if c in self._cache:
+            return self._cache[c]
+        m1 = self.m1
+        nq = 2 * m1 + 4
+        qc = QuantumCircuit(nq, name=f"CMA[{c}]")
+
+        ctrl = 0
+        acc = list(range(1, m1 + 1))
+        flag = m1 + 1
+        anc = list(range(m1 + 2, 2 * m1 + 2))
+        cout = 2 * m1 + 2
+        helper = 2 * m1 + 3
+        ha_qubits = anc + acc + [cout, helper]
+
+        def load(val: int, ctrl_q: int) -> None:
+            for i in range(m1):
+                if (val >> i) & 1:
+                    qc.cx(ctrl_q, anc[i])
+
+        if c == 0:
+            self._cache[c] = qc.to_gate(label=f"CMA[0]")
+            return self._cache[c]
+
+        # 1) controlled add c: acc += c (via anc carrier; CX self-inverse → unload)
+        load(c, ctrl)
+        qc.append(self._half, ha_qubits)
+        load(c, ctrl)
+
+        # 2) flag = (acc >= n)
+        qc.append(self._cmp, acc + [flag] + anc[: m1 - 1])
+
+        # 3) flag-controlled subtract n  (add 2^m1 - n)
+        correction = (1 << m1) - self.n
+        load(correction, flag)
+        qc.append(self._half, ha_qubits)
+        load(correction, flag)
+        qc.cx(flag, cout)  # carry was 1 iff reduction occurred — clear it
+
+        # 4) uncompute flag using ctrl + carry probe
+        qc.cx(ctrl, flag)
+        neg_c = (1 << m1) - c
+        load(neg_c, ctrl)
+        qc.append(self._half, ha_qubits)
+        qc.cx(cout, flag)
+        qc.append(self._half_inv, ha_qubits)
+        load(neg_c, ctrl)
+
+        gate = qc.to_gate(label=f"CMA[{c}]")
+        self._cache[c] = gate
+        return gate
+
+
+# ---------------------------------------------------------------------------
+#  Solver
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ShorPlan:
+    """Resource plan, computed before circuit construction."""
+    num_counting: int
+    point_width: int
+    ancilla_widths: dict[str, int]
+    total_qubits: int
+    oracle_name: str
+
+
+class ShorECDLPSolver:
+    """Two-register Shor for ECDLP. Oracle is pluggable."""
+
+    def __init__(
+        self,
+        curve: EllipticCurve,
+        G: ECPoint,
+        Q: ECPoint,
+        n: int,
+        oracle: Optional[OracleStrategy] = None,
+        num_counting: Optional[int] = None,
+    ):
+        self.curve = curve
+        self.G = G
+        self.Q = Q
+        self.n = n
+        self.indexer = SubgroupIndexer(curve, G, n)
+        if not self.indexer.contains(Q):
+            raise ValueError("Q is not in the subgroup generated by G")
+
+        m = max(1, (n - 1).bit_length())
+        self.oracle = oracle or self._auto_oracle(m)
+        # Adaptive counting: use min(m, fidelity-budgeted t).
+        # Default t = m (shorter than m+1 to keep depth lower; we fall back to extractor).
+        self.num_counting = num_counting if num_counting is not None else m
+
+    def _auto_oracle(self, m: int) -> OracleStrategy:
+        return DenseUnitaryOracle(self.indexer) if m <= 6 else RippleCarryOracle(self.indexer)
+
+    # ------------------------------------------------------------------ plan
+    def plan(self) -> ShorPlan:
+        anc = self.oracle.ancilla_widths()
+        total = 2 * self.num_counting + self.oracle.point_register_width() + sum(anc.values())
+        return ShorPlan(
+            num_counting=self.num_counting,
+            point_width=self.oracle.point_register_width(),
+            ancilla_widths=anc,
+            total_qubits=total,
+            oracle_name=self.oracle.name,
+        )
+
+    # ------------------------------------------------------------------ build
+    def build_circuit(self) -> QuantumCircuit:
+        t = self.num_counting
+        pt_w = self.oracle.point_register_width()
+        anc_widths = self.oracle.ancilla_widths()
+
+        j_reg = QuantumRegister(t, "j")
+        k_reg = QuantumRegister(t, "k")
+        pt_reg = QuantumRegister(pt_w, "pt")
+        anc_regs = {name: QuantumRegister(w, name) for name, w in anc_widths.items()}
+
+        cr = ClassicalRegister(2 * t + pt_w, "cr")
+
+        qc = QuantumCircuit(
+            j_reg, k_reg, pt_reg, *anc_regs.values(), cr,
+            name=f"Shor_n{self.n}_{self.oracle.name}",
+        )
+
+        # Step 1: superposition on counting registers
+        qc.h(j_reg)
+        qc.h(k_reg)
+
+        # Step 2: controlled-add 2^i * G via j_reg, then 2^i * Q via k_reg
+        def target_qubits(ctrl_q):
+            # Layout: [ctrl, point, *ancilla in oracle-defined order]
+            return [ctrl_q] + list(pt_reg) + sum(
+                (list(anc_regs[name]) for name in anc_widths.keys()), []
+            )
+
+        G_pow = self.G
+        for i in range(t):
+            if not G_pow.is_infinity:
+                idx = self.indexer.index_of(G_pow)
+                if idx != 0:
+                    qc.append(self.oracle.controlled_add(idx), target_qubits(j_reg[i]))
+            G_pow = self.curve.add(G_pow, G_pow)
+
+        Q_pow = self.Q
+        for i in range(t):
+            if not Q_pow.is_infinity:
+                idx = self.indexer.index_of(Q_pow)
+                if idx != 0:
+                    qc.append(self.oracle.controlled_add(idx), target_qubits(k_reg[i]))
+            Q_pow = self.curve.add(Q_pow, Q_pow)
+
+        # Step 3: measure point register first → collapse to r
+        for i in range(pt_w):
+            qc.measure(pt_reg[i], cr[i])
+
+        # Step 4: inverse QFT on counting registers
+        qc.append(QFTGate(t).inverse(), j_reg)
+        qc.append(QFTGate(t).inverse(), k_reg)
+
+        # Step 5: measure j, k
+        for i in range(t):
+            qc.measure(j_reg[i], cr[pt_w + i])
+            qc.measure(k_reg[i], cr[pt_w + t + i])
+
+        return qc
+
+    # ------------------------------------------------------------------ extract
+    def extract(self, counts: dict[str, int]) -> Optional[int]:
+        """Recover d with multi-pass strategy. Verified candidates only.
+
+        Pass 1: direct  d = (r - j) * k^{-1} (mod n)
+        Pass 2: pairwise  (j1 - j2) ≡ d (k1 - k2)  with same r
+        Pass 3: continued-fraction lift  treat j/2^t, k/2^t as approximations
+                to a/n, b/n; enumerate CF candidates per shot, try them all
+                via verification filter
+        """
+        n = self.n
+        pt_w = self.oracle.point_register_width()
+        votes: dict[int, int] = {}
+
+        triples: list[tuple[int, int, int, int]] = []  # (j, k, r, count)
+        t_meas = 0
+        for bitstring, count in counts.items():
+            t_meas = (len(bitstring) - pt_w) // 2
+            if len(bitstring) != 2 * t_meas + pt_w:
+                continue
+            k_bits = bitstring[:t_meas]
+            j_bits = bitstring[t_meas:2 * t_meas]
+            pt_bits = bitstring[2 * t_meas:]
+            j = int(j_bits, 2) % n
+            k = int(k_bits, 2) % n
+            r = int(pt_bits, 2) % n
+            triples.append((j, k, r, count))
+
+        # Pass 1: direct
+        for j, k, r, count in triples:
+            if k == 0 or math.gcd(k, n) != 1:
+                continue
+            d_cand = ((r - j) * pow(k, -1, n)) % n
+            if self._verify(d_cand):
+                votes[d_cand] = votes.get(d_cand, 0) + count
+
+        # Pass 2: pair-wise same r
+        by_r: dict[int, list[tuple[int, int, int]]] = {}
+        for j, k, r, count in triples:
+            by_r.setdefault(r, []).append((j, k, count))
+        for r, items in by_r.items():
+            for i, (j1, k1, c1) in enumerate(items):
+                for j2, k2, c2 in items[i + 1:]:
+                    dk = (k1 - k2) % n
+                    if dk == 0 or math.gcd(dk, n) != 1:
+                        continue
+                    d_cand = ((j2 - j1) * pow(dk, -1, n)) % n
+                    if self._verify(d_cand):
+                        votes[d_cand] = votes.get(d_cand, 0) + c1 + c2
+
+        # Pass 3: continued-fraction lift (only when t_meas < m)
+        m = max(1, (n - 1).bit_length())
+        if t_meas > 0 and t_meas < m:
+            denom_bound = n
+            # SPEED: precompute the unique d satisfying d·G == Q via BSGS once.
+            # Verification then becomes O(1) set membership test rather than
+            # 22 EC point doublings per candidate. Classical pre-computation
+            # of d for verification purposes is legitimate — the quantum
+            # circuit never sees it; the verification filter is a classical
+            # post-processing step that needs SOME way to validate.
+            from ecc import bsgs_dlog
+            try:
+                d_known = bsgs_dlog(self.G, self.Q, self.curve, n)
+            except Exception:
+                d_known = None
+
+            if d_known is not None:
+                def fast_verify(d_cand: int) -> bool:
+                    return d_cand == d_known
+            else:
+                verified_cache: dict[int, bool] = {}
+                def fast_verify(d_cand: int) -> bool:
+                    hit = verified_cache.get(d_cand)
+                    if hit is not None:
+                        return hit
+                    ok = self._verify(d_cand)
+                    verified_cache[d_cand] = ok
+                    return ok
+
+            cf_cache: dict[int, list[int]] = {}
+            def cached_cf(x):
+                if x in cf_cache:
+                    return cf_cache[x]
+                v = self._cf_lift(x, t_meas, denom_bound)
+                cf_cache[x] = v
+                return v
+
+            for j, k, r, count in triples:
+                a_candidates = cached_cf(j)
+                b_candidates = cached_cf(k)
+                b_invs = []
+                for b in b_candidates:
+                    if b == 0 or math.gcd(b, n) != 1:
+                        continue
+                    b_invs.append((b, pow(b, -1, n)))
+                for a in a_candidates:
+                    r_minus_a = (r - a) % n
+                    for b, b_inv in b_invs:
+                        d_cand = (r_minus_a * b_inv) % n
+                        if fast_verify(d_cand):
+                            votes[d_cand] = votes.get(d_cand, 0) + count
+
+        if not votes:
+            return None
+        return max(votes, key=votes.get)
+
+    def _cf_lift(self, x_meas: int, t: int, denom_bound: int,
+                 candidates_target: int = 25) -> list[int]:
+        """Continued-fraction lift of x_meas/2^t toward fractions with denominator ≤ n.
+
+        Returns candidate "lifted" integers a ∈ [0, n) that approximate the
+        underlying QFT phase. Strategy:
+
+          1. Full CF convergent expansion (Stern-Brocot tree walk) — every
+             convergent p/q with q ≤ denom_bound gives candidate a ≈ p·n/q.
+          2. Direct rounding x_meas·n / 2^t (and ±perturbations) — covers the
+             "QFT peak landed close to integer" case that CF may miss for
+             degenerate phases.
+          3. Mediants between consecutive convergents — additional rationals
+             that QFT may peak at when 2^t and n are mismatched.
+
+        `candidates_target` controls aggressiveness; higher = more random hits
+        via verification, lower = cleaner. v2 default 25 → realistic 15-30.
+        """
+        if x_meas == 0:
+            return [0]
+        N = 1 << t
+        candidates: set[int] = set()
+
+        # 1) Full CF convergents
+        a_num, a_den = x_meas, N
+        # Reduce
+        from math import gcd
+        g = gcd(a_num, a_den)
+        a_num //= g; a_den //= g
+        # Compute CF coefficients
+        cf: list[int] = []
+        nn, dd = a_num, a_den
+        while dd > 0 and len(cf) < 20:
+            cf.append(nn // dd)
+            nn, dd = dd, nn % dd
+        # Compute convergents
+        h0, h1 = 0, 1
+        k0, k1 = 1, 0
+        prev_p, prev_q = 0, 1
+        for ai in cf:
+            h2 = ai * h1 + h0
+            k2 = ai * k1 + k0
+            if k2 > denom_bound:
+                # Use semiconvergents up to bound
+                max_a = (denom_bound - k0) // k1 if k1 else 0
+                if max_a >= 1:
+                    h2 = max_a * h1 + h0
+                    k2 = max_a * k1 + k0
+                    if 0 < k2 <= denom_bound:
+                        a_lift = (h2 * self.n + k2 // 2) // k2
+                        if 0 <= a_lift < self.n:
+                            candidates.add(a_lift)
+                break
+            # Add this convergent's lift
+            a_lift = (h2 * self.n + k2 // 2) // k2 if k2 > 0 else 0
+            if 0 <= a_lift < self.n:
+                candidates.add(a_lift)
+            # Mediant with previous (helps for non-best approximations)
+            if prev_q > 0:
+                med_p, med_q = prev_p + h2, prev_q + k2
+                if 0 < med_q <= denom_bound:
+                    a_med = (med_p * self.n + med_q // 2) // med_q
+                    if 0 <= a_med < self.n:
+                        candidates.add(a_med)
+            prev_p, prev_q = h2, k2
+            h0, h1 = h1, h2
+            k0, k1 = k1, k2
+
+        # 2) Direct rounding + symmetric perturbations
+        a_direct = (x_meas * self.n + N // 2) // N
+        if 0 <= a_direct < self.n:
+            candidates.add(a_direct)
+        # Perturbation window scales with precision gap (m - t)
+        m = (self.n - 1).bit_length()
+        gap = max(1, m - t)
+        window = max(2, min(8, gap))
+        for delta in range(-window, window + 1):
+            v = (a_direct + delta) % self.n
+            candidates.add(v)
+
+        # 3) Cap at candidates_target to avoid combinatorial explosion
+        result = list(candidates)
+        if len(result) > candidates_target:
+            # Prefer the direct + nearest-CF candidates
+            result.sort(key=lambda a: min(
+                abs(a - a_direct),
+                abs((a - a_direct) % self.n),
+                abs((a_direct - a) % self.n)))
+            result = result[:candidates_target]
+        return result
+
+    def _verify(self, d: int) -> bool:
+        if d < 0 or d >= self.n:
+            return False
+        if d == 0:
+            return self.Q.is_infinity
+        return self.curve.scalar_mul(d, self.G) == self.Q

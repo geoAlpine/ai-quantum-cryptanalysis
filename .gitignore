@@ -1,0 +1,58 @@
+# Secrets — NEVER commit
+.env
+*.pem
+*.key
+.aws/
+
+# Python virtual env
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.Python
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+.jupyter/
+
+# IBM Quantum runtime caches
+.qiskit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+Thumbs.db
+
+# Pending IBM job metadata (contains job IDs but no secrets;
+# gitignored to keep results/ public-facing only with finalized data)
+results/_pending_*.json
+
+# Raw count data is large and per-job; opt-in tracking
+# (uncomment to track counts JSONs explicitly)
+# results/_ibm_*_counts.json
+
+# Internal session artifacts
+.claude/
+notebooks/.ipynb_checkpoints/
+
+# Test outputs
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
