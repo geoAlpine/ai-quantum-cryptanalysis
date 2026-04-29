@@ -105,8 +105,6 @@ def load_trials(results_dir: str = "results") -> list[TrialRecord]:
         # Re-derive verified hits from raw counts file if present
         verified_hits = data.get("true_d_votes", -1)
         if verified_hits == -1:
-            base = os.path.basename(path).replace("shor_", "_ibm_").rsplit("_", 1)[0]
-            # Try common raw paths
             raw_candidates = [
                 f"{results_dir}/_ibm_{bits}bit_t{t}_counts.json",
                 f"{results_dir}/_ibm_{bits}bit_counts.json",

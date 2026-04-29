@@ -146,8 +146,14 @@ def run_on_simulator(
         noise_model = NoiseModel()
         error = depolarizing_error(noise_level, 1)
         error2 = depolarizing_error(noise_level * 10, 2)
-        noise_model.add_all_qubit_quantum_error(error, ["h", "p", "x"])
-        noise_model.add_all_qubit_quantum_error(error2, ["cx"])
+        # Cover both pre-transpile gates (h/p/x/u*) and post-transpile basis
+        # gates (sx/rz/x for IBM-like; rx/ry for some Aer paths). Without this,
+        # noise registered only on h/p/x silently fails to apply after
+        # generate_preset_pass_manager rewrites everything to sx/rz.
+        sim_1q = ["sx", "x", "rz", "rx", "ry", "h", "p", "u", "u1", "u2", "u3"]
+        sim_2q = ["cx", "cz", "ecr"]
+        noise_model.add_all_qubit_quantum_error(error, sim_1q)
+        noise_model.add_all_qubit_quantum_error(error2, sim_2q)
         backend = AerSimulator(noise_model=noise_model)
 
     pm = generate_preset_pass_manager(backend=backend, optimization_level=1)

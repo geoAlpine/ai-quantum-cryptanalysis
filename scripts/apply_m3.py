@@ -6,6 +6,7 @@ Uses the IBM backend that produced the original job to fetch its readout error m
 """
 
 import json
+import math
 import os
 import sys
 
@@ -75,14 +76,11 @@ def main():
             j = int(j_b, 2) % c.n
             k = int(k_b, 2) % c.n
             r = int(pt_b, 2) % c.n
-            if k == 0 or pow(k, c.n - 2, c.n) * k % c.n != 1:
+            if k == 0 or math.gcd(k, c.n) != 1:
                 continue
-            try:
-                d_cand = ((r - j) * pow(k, -1, c.n)) % c.n
-                if curve.scalar_mul(d_cand, G) == Q:
-                    votes[d_cand] = votes.get(d_cand, 0) + cnt
-            except ValueError:
-                pass
+            d_cand = ((r - j) * pow(k, -1, c.n)) % c.n
+            if curve.scalar_mul(d_cand, G) == Q:
+                votes[d_cand] = votes.get(d_cand, 0) + cnt
         return votes
 
     raw_votes = candidate_support(counts)

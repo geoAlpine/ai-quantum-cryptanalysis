@@ -103,7 +103,6 @@ def iterate(args, iteration: int) -> bool:
 
     print(f"\n  Past trials ({len(trials)}):")
     for tr in trials:
-        m = (tr.bits if tr.bits not in [16, 17, 18, 24] else "?")
         marker = "✓" if tr.success else "✗"
         print(f"    {marker} {tr.bits}-bit t={tr.t} shots={tr.shots} hits={tr.verified_hits}")
 
