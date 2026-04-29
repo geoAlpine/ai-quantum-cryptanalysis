@@ -180,6 +180,14 @@ vs v2 comparison).
 
 If you use this work, please cite via [`CITATION.cff`](CITATION.cff).
 
+## Author / Contact
+
+**Yosuke Aoki** — [GeoAlpine LLC (ジオアルピーヌ合同会社)](https://geoalpine.net)
+Inquiries: info@geoalpine.net
+
+This submission was produced in collaboration with **Claude Sonnet 4.6**
+(Anthropic) via the Claude Code interface — see [`AGENT.md`](AGENT.md).
+
 ## License
 
 [MIT](LICENSE).
