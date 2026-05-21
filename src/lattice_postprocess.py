@@ -160,4 +160,85 @@ def hnp_recover(
     )
 
 
-__all__ = ["HNPResult", "build_hnp_lattice", "hnp_recover"]
+def hnp_score(d: int, shots: list[tuple[int, int, int]],
+              n: int, t: int) -> float:
+    """Score a candidate ``d`` against shot data via the HNP residual.
+
+    The two-register Shor relation at a noiseless peak is
+    ``n · (j_i + d · k_i) ≡ r_i · M (mod n · M)`` where ``M = 2^t``.
+    Rearranging, the residual
+    ``ε_i(d) ≡ n · (j_i + d · k_i) − r_i · M (mod n · M)`` taken in the
+    centred representation ``(−nM/2, nM/2]`` should be small for the
+    correct ``d`` (bounded by ~n/2 in absolute value when the shot lies
+    on an ideal peak) and uniformly distributed for a wrong ``d``. Sum
+    the squared centred residuals across shots; the ``d`` that minimises
+    is the recovered key.
+
+    Use :func:`hnp_score_search` to enumerate ``d ∈ [0, n)`` (feasible
+    when ``n`` is small enough — up to ~10⁴) and find the global minimum
+    without needing LLL/BKZ at all. For larger n, lattice reduction over
+    the same relation is the natural extension (see
+    :func:`build_hnp_lattice`).
+    """
+    M = 1 << t
+    modulus = n * M
+    half = modulus // 2
+    total_sq = 0
+    for (j, k, r) in shots:
+        residue = (n * (j + d * k) - r * M) % modulus
+        centred = residue if residue <= half else residue - modulus
+        total_sq += centred * centred
+    return total_sq / max(1, len(shots))
+
+
+def hnp_score_search(
+    shots: list[tuple[int, int, int]],
+    n: int,
+    t: int,
+    *,
+    max_n: int = 10_000,
+    expected_d: Optional[int] = None,
+) -> dict:
+    """Exhaustive ``d ∈ [0, n)`` HNP-score search. Only feasible when n
+    is small (≤ ``max_n``). Returns the argmin ``d`` and the runner-up
+    score gap as a confidence indicator.
+
+    On noiseless small-``m`` Aer data we expect ``d_true`` to dominate
+    with a clear gap; on hardware data dominated by uniform noise we
+    expect a nearly-flat score landscape (gap ≈ 0).
+    """
+    if n > max_n:
+        raise ValueError(
+            f"n={n:,} > max_n={max_n:,}; use lattice variant for large n"
+        )
+
+    scores: list[tuple[int, float]] = []
+    for d in range(n):
+        s = hnp_score(d, shots, n, t)
+        scores.append((d, s))
+    scores.sort(key=lambda x: x[1])
+
+    best_d, best_score = scores[0]
+    second_score = scores[1][1] if len(scores) > 1 else best_score
+    mean_score = sum(s for _, s in scores) / n
+    gap = (second_score - best_score) / max(1e-9, second_score)
+
+    return {
+        "d_recovered": best_d,
+        "best_score": best_score,
+        "second_best_score": second_score,
+        "score_gap_ratio": gap,
+        "mean_score": mean_score,
+        "matches_expected": (expected_d is not None and best_d == expected_d),
+        "expected_d": expected_d,
+        "top5": scores[:5],
+    }
+
+
+__all__ = [
+    "HNPResult",
+    "build_hnp_lattice",
+    "hnp_recover",
+    "hnp_score",
+    "hnp_score_search",
+]
