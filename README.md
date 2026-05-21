@@ -35,9 +35,9 @@ instructions below.
 ## Quick start
 
 ```bash
-# 1. Install
+# 1. Install (editable — picks up source changes without re-installing)
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # 2. Set IBM Quantum token
 cp .env.example .env
@@ -59,7 +59,7 @@ access:
 
 ```bash
 python -c "
-import sys, json; sys.path.insert(0, 'src')
+import json
 from challenges import get_challenge
 from ecc import EllipticCurve
 from shor_ecdlp import ShorECDLPSolver, RippleCarryOracle, SubgroupIndexer
@@ -78,8 +78,10 @@ print(f'recovered d = {solver.extract(counts)}')  # → 1999171
 src/
   ecc.py              Classical EC arithmetic (point add, scalar mult, BSGS)
   shor_ecdlp.py       Two-register Shor for ECDLP. Strategy-pattern oracles.
-                      Includes Adaptive Counting Precision (t<m) and
-                      CF-Lift v2 Extractor (Stern-Brocot convergents).
+                      Includes Adaptive Counting Precision (t<m), lazy
+                      SubgroupIndexer (for n ≳ 10^6), and the CF-Lift v2/v3
+                      Extractor family (Stern-Brocot convergents; v3 widens
+                      candidate enumeration for the larger-n regime).
   grover_ecdlp.py     Grover-based attack (legacy / comparison)
   quantum_ecc.py      IBM/IonQ runners, Aer wrappers, ZNE
   challenges.py       Q-Day Prize challenge curves (4-bit through 30-bit)
@@ -89,8 +91,22 @@ scripts/
   submit_18bit.py     Build & submit Shor circuit at chosen (bits, t)
                       Auto-selects best Heron r2 backend by 2Q-error;
                       enables Sampler-side dynamical decoupling + twirling.
+  submit_25bit.py     Same flow tuned for 25-bit (lazy indexer, v3 extractor,
+                      C/shot-calibrated hit projection). [Draft — not yet run.]
   fetch_result.py     Poll IBM job and extract d
   apply_m3.py         Apply M3 readout-error mitigation post-hoc
+  preflight.py        Free-metadata resource estimator (qubits/depth/2Q/fid
+                      + v3-extractor hit projection) — run before any QPU
+                      submission to avoid wasting the monthly budget.
+  aer_validate.py     End-to-end Aer pipeline test (noiseless + optional
+                      noise-model from a real IBM backend; ≤22 qubits).
+  replay_benchmark.py Regression test: re-extract d from all saved IBM
+                      counts files. Zero QPU. Run after touching extractor.
+  cflift_v3.py        Standalone CF-Lift v3 candidate generator (also
+                      embedded in shor_ecdlp.py — see notes below).
+  measure_extractor.py / measure_v3.py
+                      Empirical calibration tools that count candidate
+                      density and hit rate per shot on saved counts.
   quimb_simulate.py   Tensor-network cross-validation (≤6-bit dense)
   agent_planner.py    Read past results, propose next experiment
   agent_loop.py       Autonomous plan→submit→poll→update loop
@@ -137,18 +153,29 @@ Mathematical threshold for QFT⁻¹ to extract structure: `4ᵗ / n ≥ 1`. For 
 v2 extractor. This pushes the per-shot signal density from "would need t = 22
 counting qubits" down to "12 suffice".
 
-### 2. Continued-Fraction Lift Extractor v2
+### 2. Continued-Fraction Lift Extractor — v2 and v3
 
 When `t < m`, the direct extraction formula `d = (r − j) · k⁻¹ mod n` loses
-precision. v2 enumerates ~25 candidates per measured value via:
+precision. The CF-Lift family restores recoverability by enumerating many
+plausible candidates per measurement and routing each through the
+verification check `d_cand · G == Q`.
 
-- Full Stern-Brocot CF convergent walk (every `p/q` with `q ≤ n`)
-- Mediants between adjacent convergents (catches non-best approximations)
-- Precision-gap-scaled symmetric perturbations
-- BSGS-precomputed verifier for O(1) lookup
+**v2** (used for the 22-bit headline result): generates ~25 candidates per
+axis via the natural Stern-Brocot continued-fraction expansion plus
+mediants between adjacent convergents and a precision-gap-scaled symmetric
+perturbation window. Backed by a BSGS-precomputed verifier for fast lookup.
+On the 22-bit IBM data this delivered **12 verified hits at d = 1,999,171**,
+where the v1 (direct + ±2) extractor returned 0.
 
-On the headline 22-bit IBM data: 0 verified hits with v1 (direct + ±2
-perturbation) → **12 verified hits at d = 1,999,171** with v2.
+**v3** (added May 2026, used for scaling toward 25-bit): widens the
+enumeration further with (a) a configurable perturbation window around the
+direct rounding, (b) symmetric mirroring `x ↔ 2ᵗ − x`, (c) bit-flip
+neighbours for readout-error robustness, and (d) convergent-denominator
+scaling. The candidate count per shot is empirically calibrated on saved
+22-bit IBM data; at `cf_window = 16` it yields ~8K distinct candidates per
+shot. In this regime the extractor's verified-hit rate matches the
+uniform-noise model `C · shots / n` — see the "Honest framing" section
+below for what that implies.
 
 ### 3. Autonomous AI Agent Workflow
 
@@ -167,14 +194,55 @@ classical BSGS solves 22-bit ECDLP in milliseconds. Bitcoin's 256-bit ECDLP
 remains unattainable on near-term hardware (Google Quantum AI 2026-03 estimate:
 1,200 logical qubits, 90M Toffoli gates).
 
-What this work does claim: the **largest publicly-reported ECDLP key recovery on
-quantum hardware to date** (m = 22), achieved end-to-end by an LLM agent, and a
-novel CF-lift v2 extractor that promotes raw measurements that were previously
-unrecoverable into successful key recoveries.
+What this work claims:
+
+- The **largest publicly-reported ECDLP key recovery on quantum hardware to
+  date** (m = 22), achieved end-to-end by an LLM agent.
+- A CF-Lift v2/v3 extractor family that combines real Shor execution with
+  aggressive classical candidate enumeration through the EC-verification
+  filter. This is the same operating regime as Lelli's Q-Day Prize Round-1
+  winning 15-bit submission, extended by seven algorithmic steps.
+
+What this work explicitly does **not** claim:
+
+- That the recovered measurements carry net quantum information above the
+  uniform-noise baseline. On the 22-bit data, v2 hits sit modestly above the
+  uniform expectation (P_hit/P_mean ≈ 1.69 against the analytical noiseless
+  Shor distribution); v3, by widening the candidate set, matches the
+  uniform-noise hit rate. Both are documented behaviours, not bugs — the v3
+  extractor is a candidate generator, not a quantum-signal decoder, and its
+  source docstring says so.
+- That this approach scales to cryptographic key sizes by adding more
+  qubits alone. Bridging from m = 22 to m = 256 requires a fundamental
+  improvement in per-shot signal — i.e. error correction, not just bigger
+  candidate sets.
+
+The intended contribution is engineering-level: documenting the practical
+recovery boundary on current commercial quantum hardware honestly, with
+working code, so that the PQC-migration policy decisions downstream are made
+against an accurate picture of where the threshold actually sits today.
 
 See [`results/shor_22bit_t12_analysis.md`](results/shor_22bit_t12_analysis.md)
-for the full smoking-gun analysis (P_hit/P_mean = 1.69 sample evidence + v1
-vs v2 comparison).
+for the v1-vs-v2 comparison and analytical-distribution evidence on the
+22-bit dataset, and [`results/shor_19bit_t12_step1_analysis.md`](results/shor_19bit_t12_step1_analysis.md)
+for the deep noise/signal analysis at 19-bit.
+
+## Testing
+
+Property tests for the CF-Lift v3 candidate generator and regression tests
+that replay every saved IBM-hardware counts file through the current
+extractor:
+
+```bash
+pip install pytest
+pytest -v -m "not slow"   # fast suite (~22 sec)
+pytest -v                 # full suite incl. 22-bit replay (~75 sec)
+```
+
+The 22-bit replay is marked ``@pytest.mark.slow`` because it re-extracts
+``d = 1,999,171`` from the 35,000-shot ``ibm_fez`` counts (~30 sec).
+GitHub Actions runs the fast suite on every push and the slow suite on
+pull requests — see [`.github/workflows/test.yml`](.github/workflows/test.yml).
 
 ## Citation
 

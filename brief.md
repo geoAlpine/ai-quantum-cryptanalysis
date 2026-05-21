@@ -2,6 +2,17 @@
 
 **Q-Day Prize Submission** — `quantum-ecc`, 2026-04-29
 
+> **Note (2026-05).** This document is the original Q-Day Prize submission
+> writeup, preserved as a historical record. The repository has since
+> evolved: the **CF-Lift v3 extractor** (May 2026) extends the v2 candidate-
+> generation approach for scaling toward 25-bit, and several diagnostic
+> tools (`scripts/preflight.py`, `scripts/replay_benchmark.py`,
+> `scripts/aer_validate.py`, `scripts/measure_extractor.py`,
+> `scripts/measure_v3.py`) were added to support reproducible benchmarking
+> and resource estimation. See [`README.md`](README.md) for the current
+> implementation status and the v2/v3 honest framing. All hardware
+> results and IBM Job IDs documented below remain valid.
+
 > **Headline result.** A **22-bit (m = 22)** elliptic-curve discrete-log private
 > key (`d = 1,999,171`) was recovered from a quantum-hardware run on `ibm_fez`
 > using 73 qubits and 124,422 transpiled 2-qubit gates. **+7 algorithmic steps
