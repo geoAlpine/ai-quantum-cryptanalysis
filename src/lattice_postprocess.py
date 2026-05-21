@@ -164,30 +164,42 @@ def hnp_score(d: int, shots: list[tuple[int, int, int]],
               n: int, t: int) -> float:
     """Score a candidate ``d`` against shot data via the HNP residual.
 
-    The two-register Shor relation at a noiseless peak is
-    ``n · (j_i + d · k_i) ≡ r_i · M (mod n · M)`` where ``M = 2^t``.
-    Rearranging, the residual
-    ``ε_i(d) ≡ n · (j_i + d · k_i) − r_i · M (mod n · M)`` taken in the
-    centred representation ``(−nM/2, nM/2]`` should be small for the
-    correct ``d`` (bounded by ~n/2 in absolute value when the shot lies
-    on an ideal peak) and uniformly distributed for a wrong ``d``. Sum
-    the squared centred residuals across shots; the ``d`` that minimises
-    is the recovered key.
+    After measuring the point register at some ``R_0``, the two-register
+    Shor (j, k) state is supported on the lattice
+    ``L_d(R_0) = {(jₛ, kₛ) ∈ [0, M)² : jₛ + d·kₛ ≡ R_0 (mod n)}``.
+    Inverse-QFT-ing concentrates that lattice's amplitude at
+    ``(j_m, k_m)`` such that
+    ``j_m + d · k_m ≡ round(s · M / n) (mod M)``
+    for *some* integer ``s ∈ [0, n)`` — the "Shor index" of the peak,
+    a hidden variable that varies per shot. Note that ``r`` (the
+    measured point) does **not** enter this modular relation: ``r``
+    selects which lattice ``L_d(R_0)`` we project into, but the QFT
+    peaks of every such lattice live at the same set of ``(j_m, k_m)``.
 
-    Use :func:`hnp_score_search` to enumerate ``d ∈ [0, n)`` (feasible
-    when ``n`` is small enough — up to ~10⁴) and find the global minimum
-    without needing LLL/BKZ at all. For larger n, lattice reduction over
-    the same relation is the natural extension (see
-    :func:`build_hnp_lattice`).
+    The score is therefore
+    ``score(d) = Σ_i  min_{s ∈ [0, n)} | (j_i + d·k_i) mod M - round(s·M/n) |²``
+
+    For the correct ``d`` the residuals are bounded by ~M/(2n) and the
+    total is small; for wrong ``d`` the (j + d·k) mod M values are
+    pseudo-uniform in [0, M) and the residual is large. The ``r`` field
+    of each shot is unused by this score — kept in the function
+    signature to match the parsed-shot tuple shape.
     """
     M = 1 << t
-    modulus = n * M
-    half = modulus // 2
+    # Pre-compute the n expected peak positions, sorted for binary search.
+    expected = sorted({(s * M + n // 2) // n % M for s in range(n)})
+    half = M // 2
     total_sq = 0
-    for (j, k, r) in shots:
-        residue = (n * (j + d * k) - r * M) % modulus
-        centred = residue if residue <= half else residue - modulus
-        total_sq += centred * centred
+    for (j, k, _r) in shots:
+        v = (j + d * k) % M
+        # Find the closest expected peak (with wrap-around at M).
+        best = M
+        for e in expected:
+            diff = (v - e) % M
+            diff = diff if diff <= half else diff - M
+            if abs(diff) < best:
+                best = abs(diff)
+        total_sq += best * best
     return total_sq / max(1, len(shots))
 
 
