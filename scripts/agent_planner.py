@@ -34,8 +34,6 @@ import sys
 from dataclasses import dataclass
 from typing import Optional
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 from challenges import CHALLENGES
 
 

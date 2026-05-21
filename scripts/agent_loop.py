@@ -33,7 +33,7 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.dirname(__file__))  # agent_planner lives next door
 
 from agent_planner import load_trials, propose_next, project_resources
 

@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantum-ecc"
+version = "0.1.0"
+description = "AI-driven Shor's algorithm for ECDLP on IBM Quantum hardware"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Yosuke Aoki", email = "info@geoalpine.net"}]
+requires-python = ">=3.13"
+dependencies = [
+    "qiskit>=1.3.0",
+    "qiskit-aer>=0.15.0",
+    "qiskit-ibm-runtime>=0.34.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "sympy>=1.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+notebooks = [
+    "matplotlib>=3.8.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.29.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/geoAlpine/ai-quantum-cryptanalysis"
+Company = "https://geoalpine.net"
+
+# src-layout: each .py in src/ is a flat top-level module after install.
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = [
+    "analysis",
+    "cf_lift",
+    "challenges",
+    "ecc",
+    "grover_ecdlp",
+    "quantum_ecc",
+    "shor_ecdlp",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "slow: tests that take more than ~5 seconds (e.g. 22-bit extractor replay)",
+    "requires_ibm: tests that need a live IBM Quantum API token",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:qiskit.*",
+]

@@ -10,8 +10,6 @@ import math
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import mthree
 from challenges import get_challenge
 from ecc import EllipticCurve

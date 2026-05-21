@@ -23,13 +23,10 @@ from __future__ import annotations
 
 import os
 import random
-import sys
 
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from challenges import get_challenge
 from ecc import EllipticCurve

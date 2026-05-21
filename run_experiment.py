@@ -21,8 +21,6 @@ import json
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-
 from ecc import make_small_curve, bsgs_dlog, _PRESETS, EllipticCurve
 from quantum_ecc import dummy_shor_circuit, run_on_simulator, run_on_ibm, run_on_ionq, zero_noise_extrapolation
 from grover_ecdlp import grover_ecdlp_circuit, make_grover_instance
