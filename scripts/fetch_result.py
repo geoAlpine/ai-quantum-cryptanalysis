@@ -5,8 +5,6 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 from challenges import get_challenge
 from ecc import EllipticCurve
 from quantum_ecc import load_token
@@ -41,14 +39,19 @@ def main(pending_path: str):
     c = get_challenge(meta["bits"])
     curve = EllipticCurve(0, 7, c.p)
     G, Q = curve.point(*c.G), curve.point(*c.Q)
-    ind = SubgroupIndexer(curve, G, c.n)
+    # Use lazy indexer for large subgroups (≥ ~10^6 elements would be slow to enumerate).
+    lazy = c.n >= 5_000_000
+    ind = SubgroupIndexer(curve, G, c.n, lazy=lazy)
     solver = ShorECDLPSolver(curve, G, Q, c.n,
                              oracle=RippleCarryOracle(ind),
-                             num_counting=meta["t"])
+                             num_counting=meta["t"],
+                             lazy=lazy)
 
-    d = solver.extract(counts)
+    cf_window = meta.get("cf_window", 32)
+    d = solver.extract(counts, cf_window=cf_window)
     print(f"\nRecovered d = {d}  (expected {meta['expected_d']})  "
-          f"-> {'OK' if d == meta['expected_d'] else 'FAIL'}")
+          f"-> {'OK' if d == meta['expected_d'] else 'FAIL'}  "
+          f"[extractor cf_window={cf_window}]")
 
     out_path = f"results/shor_{meta['bits']}bit_t{meta['t']}_{meta['shots']}shots_ibm.json"
     with open(out_path, "w") as f:
