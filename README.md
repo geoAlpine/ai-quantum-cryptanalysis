@@ -72,6 +72,45 @@ print(f'recovered d = {solver.extract(counts)}')  # → 1999171
 "
 ```
 
+## Diagnostic: was this *actually* quantum signal, or verification filter?
+
+The recovery above uses ``extract()``, which generates many CF-Lift
+candidates per shot and accepts any that pass the EC verification check
+``d_cand · G == Q``. In the NISQ regime this is dominated by the
+**verification filter**: with ~8K candidates per shot and 35K shots, the
+uniform-noise expectation already predicts ≈10 hits at the true ``d``,
+matching what we observe. To distinguish *quantum signal* from
+verification-filter brute force, we run a **collective vote** that does
+not pre-compute ``d`` via BSGS:
+
+```bash
+python scripts/collective_decode.py \
+    --counts results/_ibm_22bit_t12_counts.json \
+    --bits 22 --window 16
+```
+
+Output on the headline 22-bit run:
+
+```
+votes(d_true)        : 137
+uniform-noise E[v]/d : 137.32
+z-score              : -0.03σ
+rank of d_true       : 1,024,632 / 2,098,699
+```
+
+i.e. the true ``d`` sits at the **48.8th percentile** of the candidate
+vote distribution — statistically indistinguishable from any other ``d``
+value. The 22-bit recovery is real, but it lives in the *same*
+verification-filter regime as Lelli's Round-1 prize-winning 15-bit
+submission — there is no collective quantum signal that the extractor
+can convert into recovery without already knowing the answer.
+
+`scripts/signal_boundary_scan.py` automates this test across a range of
+``m`` (noiseless or with an IBM noise model) so the next QPU submission
+can target the largest ``m`` where genuine collective signal still
+survives. See `results/shor_19bit_t12_step1_analysis.md` and the
+"Honest framing" section below for the deeper analysis.
+
 ## Layout
 
 ```
