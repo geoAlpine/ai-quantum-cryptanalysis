@@ -21,6 +21,23 @@ The rules encode the strategic reasoning shown by the human + Claude in our
 2026-04-27→28 session, distilled into a deterministic policy. An LLM-augmented
 variant can replace the rules with a model call (`anthropic.messages.create`)
 in a follow-up; left as `--llm` flag for future work.
+
+**Important — what this planner actually optimises for** (2026-05-21):
+
+The ``confidence`` and ``verified_hits`` fields below count shots whose direct
+extraction yields the *known* ``d_true`` and pass the EC verification check.
+On the 22-bit / 19-bit IBM runs, the collective-vote test
+(``scripts/collective_decode.py``) showed that ``d_true`` sits at the median
+of the candidate-vote distribution — i.e. the verified-hits count is what
+uniform-noise + candidate density predicts, *not* a quantum-signal-driven
+recovery. So the rules below are climbing the **verification-filter regime**
+ladder, not a collective-signal ladder.
+
+For a true-signal ladder, run ``scripts/signal_boundary_scan.py`` to find the
+``m`` where collective signal still survives hardware noise, and submit
+there. The two ladders converge at the boundary where the verification
+filter stops being load-bearing — currently somewhere around m=8–12 on
+ibm_fez, to be measured.
 """
 
 from __future__ import annotations
@@ -293,6 +310,21 @@ def main():
             print(f"  Projected: qubits={p_['qubits']}, "
                   f"~{p_['est_2Q_gates']} 2Q gates, "
                   f"fid≈10^{p_['est_fidelity_log10']:.0f}")
+
+    # Diagnostic note — flag that this planner climbs the verification-filter
+    # ladder, not the collective-signal ladder. See module docstring.
+    print()
+    print("=== Regime caveat ===")
+    print("  This planner's `verified_hits` count is verification-filter")
+    print("  dominated. On 19-bit and 22-bit ibm_fez data, collective vote")
+    print("  testing puts d_true at the median of the candidate distribution")
+    print("  (z ≈ 0σ), so 'verified_hits' here does NOT measure quantum")
+    print("  signal extraction.")
+    print()
+    print("  For the signal-regime ladder, run:")
+    print("    python scripts/signal_boundary_scan.py --m 4 6 8 10 \\")
+    print("        --noise-from ibm_fez")
+    print("  to find the largest m where collective signal survives.")
 
 
 if __name__ == "__main__":
