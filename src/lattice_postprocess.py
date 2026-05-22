@@ -160,6 +160,46 @@ def hnp_recover(
     )
 
 
+def hnp_score_likelihood(d: int, shots: list[tuple[int, int, int]],
+                          n: int, t: int, *, sigma: float = 0.0) -> float:
+    """Bayesian-style scoring: each shot's residual is modelled as a
+    mixture of Gaussians centred on the n expected peak positions.
+
+    The negative log-likelihood replaces the squared-distance score.
+    Empirically widens the gap between d-class and competitors on the
+    same noisy data, at marginal extra cost (still O(n × shots × n))
+    but more principled.
+
+    ``sigma`` controls the peak width — auto-tuned to ~M/(2n) when 0,
+    matching the rounding error of an ideal noiseless peak.
+    """
+    import math
+    M = 1 << t
+    if sigma <= 0:
+        sigma = max(1.0, M / (2 * n))
+    inv_2s2 = 1.0 / (2 * sigma * sigma)
+    expected = sorted({(s * M + n // 2) // n % M for s in range(n)})
+    half = M // 2
+    total_neg_logl = 0.0
+    for (j, k, _r) in shots:
+        v = (j + d * k) % M
+        # Full Gaussian-mixture likelihood: sum exp(-d²/2σ²) across all
+        # peaks, then take −log. log-sum-exp trick for stability.
+        d2_list = []
+        for e in expected:
+            diff = (v - e) % M
+            diff = diff if diff <= half else diff - M
+            d2_list.append(diff * diff)
+        # log-sum-exp: -log Σ exp(-d²/(2σ²)) = log_sum_exp_min(-d²)
+        m_min = min(d2_list)
+        from math import exp, log
+        s = sum(exp(-(d2 - m_min) * inv_2s2) for d2 in d2_list)
+        # neg log-likelihood (constant terms dropped)
+        nll = m_min * inv_2s2 - log(s)
+        total_neg_logl += nll
+    return total_neg_logl / max(1, len(shots))
+
+
 def hnp_score(d: int, shots: list[tuple[int, int, int]],
               n: int, t: int) -> float:
     """Score a candidate ``d`` against shot data via the HNP residual.
