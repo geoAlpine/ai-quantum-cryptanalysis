@@ -17,7 +17,12 @@ import sys
 from challenges import get_challenge
 from ecc import EllipticCurve
 from quantum_ecc import load_token
-from shor_ecdlp import ShorECDLPSolver, RippleCarryOracle, SubgroupIndexer
+from shor_ecdlp import (
+    DenseUnitaryOracle,
+    RippleCarryOracle,
+    ShorECDLPSolver,
+    SubgroupIndexer,
+)
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
@@ -90,6 +95,11 @@ def main():
     p.add_argument("--shots", type=int, default=20000)
     p.add_argument("--backend", default="auto",
                    help="Backend name or 'auto' for best-fidelity selection")
+    p.add_argument("--oracle", choices=["ripple", "dense", "auto"], default="auto",
+                   help="auto = dense for m<=6 (much cheaper transpile), ripple otherwise")
+    p.add_argument("--extractor", choices=["v3", "hnp"], default="v3",
+                   help="v3 = the verification-filter CF-Lift family; "
+                        "hnp = collective-signal recovery via HNP score + d-class verify")
     p.add_argument("--no-dd", action="store_true", help="Disable dynamical decoupling")
     p.add_argument("--dry-run", action="store_true",
                    help="Build & transpile only — do NOT submit (no QPU time used)")
@@ -102,8 +112,16 @@ def main():
 
     curve = EllipticCurve(0, 7, c.p)
     G, Q = curve.point(*c.G), curve.point(*c.Q)
+    m = max(1, (c.n - 1).bit_length())
     ind = SubgroupIndexer(curve, G, c.n)
-    oracle = RippleCarryOracle(ind)
+    oracle_kind = args.oracle
+    if oracle_kind == "auto":
+        oracle_kind = "dense" if m <= 6 else "ripple"
+    elif oracle_kind == "dense" and m > 6:
+        print(f"  ERROR: dense oracle requires m<=6 (got m={m}). Aborting.")
+        return 1
+    oracle = DenseUnitaryOracle(ind) if oracle_kind == "dense" else RippleCarryOracle(ind)
+    print(f"  oracle: {oracle_kind} (m={m})")
     solver = ShorECDLPSolver(curve, G, Q, c.n, oracle=oracle, num_counting=args.t)
     plan = solver.plan()
     print(f"\nPlan: oracle={plan.oracle_name}  qubits={plan.total_qubits}  "
@@ -150,13 +168,17 @@ def main():
     print(f"  Job ID: {job.job_id()}  status={job.status()}")
 
     os.makedirs("results", exist_ok=True)
-    pending_path = f"results/_pending_{args.bits}bit_t{args.t}_ibm.json"
+    pending_path = (
+        f"results/_pending_{args.bits}bit_t{args.t}_{oracle_kind}_{args.extractor}_ibm.json"
+    )
     with open(pending_path, "w") as f:
         json.dump({
-            "job_id": job.job_id(), "backend": args.backend, "bits": args.bits,
+            "job_id": job.job_id(), "backend": backend.name, "bits": args.bits,
             "t": args.t, "shots": args.shots,
             "expected_d": c.expected_d, "qubits": plan.total_qubits,
             "transpiled_depth": isa.depth(), "transpiled_2Q": cx,
+            "oracle": oracle_kind,
+            "extractor": args.extractor,
         }, f, indent=2)
     print(f"\nSaved metadata to {pending_path}")
     print(f"To poll & extract once done:")

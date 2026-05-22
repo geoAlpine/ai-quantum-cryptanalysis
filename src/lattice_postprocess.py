@@ -247,10 +247,97 @@ def hnp_score_search(
     }
 
 
+def hnp_recover_with_verification(
+    shots: list[tuple[int, int, int]],
+    n: int,
+    t: int,
+    verify_fn,
+    *,
+    top_k: int = 10,
+) -> dict:
+    """End-to-end signal-regime recovery: HNP score → top-K candidates →
+    verify each (and its modular inverse partner ``(n - d) % n``) against
+    the EC check ``d · G == Q``.
+
+    This is the **production** recovery flow for the iterative + dense
+    Shor variants where:
+      - HNP top-1 may be ``d_true`` directly (noiseless small n) or
+        ``-d_true mod n`` (most other cases) — symmetry-driven.
+      - On hardware noise the right ``d`` may shift further down the
+        ranking but should remain inside the top few.
+
+    Parameters
+    ----------
+    shots
+        Parsed ``(j, k, r)`` triples.
+    n, t
+        Subgroup order and counting register width.
+    verify_fn
+        Callable ``d -> bool`` returning ``True`` iff ``d · G == Q``.
+        Pass ``lambda d: curve.scalar_mul(d, G) == Q`` from the caller.
+    top_k
+        Number of HNP-score-best candidates to verify (plus their
+        anti-d partners). Default 10 covers the typical hardware
+        regime where d_true may rank 4-6 (see 2026-05-21 n=31 data).
+
+    Returns
+    -------
+    dict
+        Keys: ``d_recovered`` (int or None), ``rank_in_hnp`` (int),
+        ``verified_via_anti_d`` (bool), ``top_k_searched`` (int),
+        ``hnp_top_k`` (list of (d, score)), ``elapsed_seconds`` (float).
+    """
+    import time
+    t0 = time.time()
+    # Score all d ∈ [0, n) — only feasible for small n. For large n
+    # this should be replaced with a lattice-reduction variant.
+    if n > 10_000:
+        raise ValueError(
+            f"n={n:,} > 10K; need lattice-reduction HNP for genuine recovery at this scale"
+        )
+
+    scores = sorted(
+        ((d, hnp_score(d, shots, n, t)) for d in range(n)),
+        key=lambda x: x[1],
+    )
+
+    seen: set[int] = set()
+    for rank, (d_cand, _score) in enumerate(scores[:top_k], 1):
+        for candidate, via_anti in [(d_cand, False),
+                                     ((n - d_cand) % n, True)]:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            if candidate == 0:
+                continue
+            try:
+                if verify_fn(candidate):
+                    return {
+                        "d_recovered": candidate,
+                        "rank_in_hnp": rank,
+                        "verified_via_anti_d": via_anti,
+                        "top_k_searched": top_k,
+                        "hnp_top_k": [(d, s) for d, s in scores[:top_k]],
+                        "elapsed_seconds": time.time() - t0,
+                    }
+            except Exception:
+                continue
+
+    return {
+        "d_recovered": None,
+        "rank_in_hnp": None,
+        "verified_via_anti_d": None,
+        "top_k_searched": top_k,
+        "hnp_top_k": [(d, s) for d, s in scores[:top_k]],
+        "elapsed_seconds": time.time() - t0,
+    }
+
+
 __all__ = [
     "HNPResult",
     "build_hnp_lattice",
     "hnp_recover",
     "hnp_score",
     "hnp_score_search",
+    "hnp_recover_with_verification",
 ]
