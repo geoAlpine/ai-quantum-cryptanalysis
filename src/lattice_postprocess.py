@@ -59,18 +59,36 @@ def build_hnp_lattice(
     *,
     max_shots: int | None = None,
 ):
-    """Construct the HNP lattice from Shor-ECDLP measurements.
+    """Construct the Boneh-Venkatesan-style HNP lattice for the
+    two-register Shor ECDLP peak relation.
 
-    Each shot ``(j_i, k_i, r_i)`` with the QFT-output convention
-    ``j_i, k_i ∈ [0, 2^t)`` and ``r_i ∈ [0, n)`` contributes one row.
+    Per shot the noiseless ideal satisfies
+    ``n · (j_i + d · k_i) ≡ s_i · M (mod n · M)``
+    for some integer ``s_i ∈ [0, n)`` (the hidden Shor peak index).
+    Stacked across ``N`` shots, this is a multivariate HNP with
+    unknowns ``d, s_1, …, s_N``.
 
-    The unknowns are ``d`` and per-shot integer ``s_i`` encoding which
-    QFT peak the shot landed on. The lattice is built so that the target
-    vector ``(j_i, ..., 0)`` is close to the lattice vector encoding the
-    true ``d`` and ``{s_i}``.
+    Lattice basis (``N+1`` generators, ``N+1`` columns):
 
-    Returns the fpylll IntegerMatrix and target vector. Caller runs LLL
-    or BKZ and decodes ``d`` from the short vector's last coordinate.
+      - Row 0 (the "d generator"): ``[n·k_1, n·k_2, …, n·k_N, B]``
+        where ``B = 1`` keeps the d-encoded coordinate small after
+        reduction.
+      - Row i (for ``i ∈ [1, N]``, the "s_i generator"):
+        ``[0, …, -M (column i-1), …, 0, 0]``.
+
+    A lattice point ``α · row_0 + Σ_i β_i · row_i`` has coordinates
+    ``(α · n · k_i − β_i · M  for i, α · B)``. Setting ``α = d`` and
+    ``β_i = s_i`` makes the first ``N`` coordinates equal
+    ``n · d · k_i − s_i · M``, which is close to ``-n · j_i`` (the
+    target) by the Shor relation. The last coordinate is then ``d``,
+    encoding the recovered key.
+
+    Returns ``(B, target)`` where ``target = [-n·j_1, …, -n·j_N, 0]``.
+    Caller embeds CVP→SVP and runs LLL/BKZ; ``hnp_recover`` does this.
+
+    Note: ``r`` is intentionally NOT used — the post-pt-measurement
+    state's R₀ shifts the Shor lattice but the QFT peak positions in
+    (j, k) are the same set for every R₀.
     """
     from fpylll import IntegerMatrix
 
@@ -79,21 +97,17 @@ def build_hnp_lattice(
         shots = shots[:max_shots]
     N = len(shots)
 
-    # Lattice dimensions: N rows for modular relations + 1 row for the d
-    # column. Columns: N coefficients + 1 last column scaling by M.
     A = IntegerMatrix(N + 1, N + 1)
-    for i in range(N):
-        A[i, i] = n * M
-    for i, (j_i, k_i, _r_i) in enumerate(shots):
-        # The d-row contributes k_i * n to column i.
-        A[N, i] = (k_i * n) % (n * M)
-    A[N, N] = 1
+    # Row 0: d generator.
+    for i, (_j_i, k_i, _r_i) in enumerate(shots):
+        A[0, i] = n * k_i
+    A[0, N] = 1  # d-tracker column
 
-    # Target vector: (n * j_1 - r_1 * M, ..., n * j_N - r_N * M, 0).
-    target = [
-        (n * j_i - r_i * M) % (n * M)
-        for (j_i, k_i, r_i) in shots
-    ] + [0]
+    # Rows 1..N: each s_i generator contributes -M in its own column.
+    for i in range(N):
+        A[1 + i, i] = -M
+
+    target = [-n * j_i for (j_i, _k_i, _r_i) in shots] + [0]
     return A, target
 
 
@@ -107,6 +121,15 @@ def hnp_recover(
     expected_d: Optional[int] = None,
 ) -> HNPResult:
     """LLL/BKZ-driven recovery of ``d`` from Shor-ECDLP shots.
+
+    **Status**: prototype. The CVP→SVP embedding currently lands on
+    trivial short vectors (d=0 / norm=0) on noiseless 4-bit dense data
+    where exhaustive ``hnp_score_search`` cleanly recovers d-class. The
+    issue is most likely in the embedding scale (``sentinel = 1`` may
+    be too small, letting the target be absorbed without paying enough
+    cost) or in the basis ordering after LLL. Treat this as scaffolding
+    until a deeper validation pass — for n ≤ 10K use
+    ``hnp_score_search`` / ``hnp_recover_with_verification`` instead.
 
     Parameters
     ----------
@@ -126,36 +149,61 @@ def hnp_recover(
         Optional: if provided, the function also reports whether the
         recovered ``d_candidate`` matches. Useful for validation runs.
     """
-    from fpylll import LLL, BKZ
+    from fpylll import IntegerMatrix, LLL, BKZ
 
     A, target = build_hnp_lattice(shots, n, t, max_shots=max_shots)
     N = A.nrows - 1
 
-    LLL.reduction(A)
-    if block_size > 2:
-        BKZ.reduction(A, BKZ.Param(block_size=block_size))
+    # CVP → SVP embedding: append target as an extra row with a sentinel
+    # in the new last column. After reduction, the short vector that
+    # contains the embedded target (sentinel in last coord) decodes to
+    # (lattice_vec - target), and its second-to-last coord is d.
+    sentinel = 1  # any small positive — controls how "attractive" the
+                   # target is to the short basis vector.
+    n_cols = A.ncols
+    Aem = IntegerMatrix(A.nrows + 1, n_cols + 1)
+    for r in range(A.nrows):
+        for c in range(n_cols):
+            Aem[r, c] = A[r, c]
+        Aem[r, n_cols] = 0
+    for c in range(n_cols):
+        Aem[A.nrows, c] = target[c]
+    Aem[A.nrows, n_cols] = sentinel
 
-    # The recovered d is encoded in the last column of the shortest
-    # vector that captures most of the target. We iterate the reduced
-    # basis and pick the row whose last coordinate yields a verifier-
-    # consistent d.
-    best_d = 0
+    LLL.reduction(Aem)
+    if block_size > 2:
+        BKZ.reduction(Aem, BKZ.Param(block_size=block_size))
+
+    # Scan reduced basis for the row whose embedded-sentinel is ±sentinel —
+    # that row contains the (lattice − target) closest-vector difference.
+    best_d = None
     best_norm = float("inf")
     second_norm = float("inf")
-    for i in range(A.nrows):
-        norm_sq = sum(A[i, j] ** 2 for j in range(A.ncols))
+    for r in range(Aem.nrows):
+        if abs(Aem[r, n_cols]) != sentinel:
+            continue
+        sign = -1 if Aem[r, n_cols] == sentinel else 1
+        # The d coordinate sits in column A.ncols-1 of the embedded
+        # vector. Recover sign-adjusted d.
+        d_raw = sign * Aem[r, n_cols - 1]
+        # norm of the "residual" portion (first N coords).
+        norm_sq = sum(Aem[r, c] ** 2 for c in range(N))
         if norm_sq < best_norm:
             second_norm = best_norm
             best_norm = norm_sq
-            best_d = A[i, A.ncols - 1] % n
+            best_d = d_raw % n
         elif norm_sq < second_norm:
             second_norm = norm_sq
 
-    confidence = 1.0 - (best_norm / second_norm) if second_norm > 0 else 0.0
+    if best_d is None:
+        best_d = 0  # fallback — likely indicates lattice failure
+    confidence = (
+        1.0 - (best_norm / second_norm) if second_norm > 0 and second_norm < float("inf") else 0.0
+    )
     return HNPResult(
         d_candidate=int(best_d),
         confidence=float(confidence),
-        short_vector_norm=float(best_norm ** 0.5),
+        short_vector_norm=float(best_norm ** 0.5) if best_norm < float("inf") else 0.0,
         used_shots=N,
     )
 
