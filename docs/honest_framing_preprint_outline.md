@@ -170,6 +170,48 @@ The 22-bit headline run shows **literally zero** collective signal —
 - That run, if it passes the collective vote argmax test, would be the
   first publicly documented *signal-regime* recovery on quantum hardware.
 
+### 5.5 Phase 1 hardware datapoint (in preparation, 2026-05)
+
+We have validated the full pipeline at ``m = 3`` (n = 7) via noisy Aer
+simulation against the calibration of three Heron r2 backends:
+
+| Backend | shots | sim runs | d_true HNP rank | gap | recovery |
+|---|---|---|---|---|---|
+| ibm_kingston | 1024 | 3 | 2 | 3.0% | 3/3 direct |
+| ibm_kingston | 2048 | 3 | 2 | 4.0% | 3/3 direct |
+| ibm_kingston | 4096 | 3 | 2 | 5.0% | 3/3 direct |
+| ibm_fez | 2048 | 1 | 4 | 6.6% | 1/1 via anti-d |
+| ibm_marrakesh | 2048 | 1 | TBD | TBD | TBD |
+
+The HNP score reliably places ``d_true`` at rank 2 (one above the
+``-d_true mod n`` partner) across all ibm_kingston trials, with the
+direct ``d_true · G == Q`` verification succeeding on the first try.
+
+This is the configuration we will submit to real hardware (when the
+month's open-plan budget refreshes; current allocation already
+exhausted on the prior 19/22-bit verification-filter runs).
+
+**What we will claim from the Phase 1 hardware run** (assuming the
+recovery matches the noisy preview):
+
+- The first quantum-hardware ECDLP recovery in which the recovered
+  ``d`` is identified by *cross-shot collective scoring*, not by
+  per-shot verification filtering.
+- A precise quantification of where the recovery is genuine vs verification-
+  dominated, via the score gap and rank-distribution metrics.
+- The reproducible diagnostic toolchain (this repository) that lets the
+  community apply the same classification to any future hardware
+  recovery.
+
+**What we will not claim** (and explicitly defer):
+
+- That this represents a quantum advantage over classical attack — BSGS
+  solves ``m = 3`` in microseconds.
+- That the recovery scales to cryptographic key sizes — the next
+  challenge is whether the rank-2 property survives at ``n ≥ 100``,
+  which our current implementation hits the ``t > m + ~2`` wrap-around
+  bug at and does not yet support.
+
 ## 6. Conclusion (~0.5 page)
 
 - The Shor-ECDLP recoveries currently published on quantum hardware sit
