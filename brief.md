@@ -12,6 +12,20 @@
 > and resource estimation. See [`README.md`](README.md) for the current
 > implementation status and the v2/v3 honest framing. All hardware
 > results and IBM Job IDs documented below remain valid.
+>
+> **Note (2026-05-25, Phase 1 hardware datapoint).** Since this writeup, we
+> have **submitted and recovered a separate hardware datapoint in a
+> qualitatively different recovery category**: 4-bit (m = 3) on
+> `ibm_kingston`, Job ID `d89s7c9789is7393nie0`, decoded via the
+> production HNP+verify pipeline rather than the verification-filter
+> brute force used in the 22-bit headline (and in Lelli's 15-bit
+> Round-1 winner). The recovered `d = 6` lands at HNP score rank 2 with
+> direct verification — exactly as the 14 / 14 noisy-Aer trials
+> predicted. See `README.md` § "Phase 1 — signal-regime recovery" and
+> `docs/honest_framing_preprint_outline.md` § 5.5 for the new result.
+> The 22-bit headline below remains the **scale** record; the Phase 1
+> recovery is a **methodology** datapoint that the field has not had
+> before.
 
 > **Headline result.** A **22-bit (m = 22)** elliptic-curve discrete-log private
 > key (`d = 1,999,171`) was recovered from a quantum-hardware run on `ibm_fez`
