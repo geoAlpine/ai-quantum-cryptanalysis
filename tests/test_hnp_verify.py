@@ -127,3 +127,56 @@ def test_hnp_recover_rejects_large_n():
     verify = lambda d: False
     with pytest.raises(ValueError, match="lattice"):
         hnp_recover_with_verification(shots, n_too_large, 12, verify, top_k=5)
+
+
+def test_phase1_hardware_result_replays():
+    """**Hardware regression test**: replay the Phase 1 ibm_kingston
+    submission counts through the production HNP+verify pipeline and
+    assert recovery succeeds with the documented metrics. If this ever
+    fails, either we broke the decoder OR the saved counts changed."""
+    import json
+    import os
+
+    repo = os.path.join(os.path.dirname(__file__), "..")
+    counts_path = os.path.join(
+        repo, "results", "shor_4bit_t6_1024shots_hnp_ibm.json"
+    )
+    if not os.path.exists(counts_path):
+        pytest.skip("Phase 1 hardware counts not present in this checkout")
+
+    blob = json.load(open(counts_path))
+    counts = blob["counts"]
+    c, curve, G, Q = _curve_setup(blob["bits"])
+    t = blob["t"]
+    pt_w = blob.get("qubits", 15) - 2 * t  # = 3 for the m=3 dense submission
+    n = c.n
+    d_true = c.expected_d
+
+    shots = []
+    for bs, cnt in counts.items():
+        if len(bs) != 2 * t + pt_w:
+            continue
+        k = int(bs[:t], 2) % n
+        j = int(bs[t:2 * t], 2) % n
+        r = int(bs[2 * t:], 2) % n
+        for _ in range(cnt):
+            shots.append((j, k, r))
+    assert len(shots) == 1024
+
+    verify = _make_verify(curve, G, Q)
+    result = hnp_recover_with_verification(shots, n, t, verify, top_k=7)
+    # Hardware reality: d_true recovered, at HNP rank 2, via direct verify.
+    assert result["d_recovered"] == d_true
+    assert result["rank_in_hnp"] == 2, (
+        f"Phase 1 hardware rank expected 2, got {result['rank_in_hnp']}"
+    )
+    assert result["verified_via_anti_d"] is False, (
+        "Phase 1 hardware was direct-verify recovery (no anti-d needed); "
+        "if this assert flips that's an interesting algorithmic change."
+    )
+    # d-class {d_true, n-d_true} should be in top-3
+    d_class = {d_true, (n - d_true) % n}
+    top3 = {d for d, _ in result["hnp_top_k"][:3]}
+    assert top3 & d_class == d_class, (
+        f"d-class {d_class} should be in top-3 {top3} on Phase 1 hardware"
+    )
