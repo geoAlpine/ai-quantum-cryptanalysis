@@ -1,6 +1,18 @@
-# Phase 1 Hardware Submission Readiness
+# Phase 1 Hardware Submission Readiness — **COMPLETED 2026-05-25**
 
-*Last updated: 2026-05-22*
+*Submitted Job ID: ``d89s7c9789is7393nie0``*
+*Result: d_true=6 recovered at HNP rank 2, direct verify, no anti-d fallback.*
+*Hardware behaviour matched the 14 / 14 noisy-Aer trial prediction exactly.*
+
+See README "Phase 1 — signal-regime recovery" section and
+``docs/honest_framing_preprint_outline.md`` §5.5 for the public-facing
+writeup. This document remains as the **pre-submission planning record**
+for traceability — every box below was checked before the QPU was
+spent.
+
+---
+
+*Last pre-submission update: 2026-05-22*
 
 ## Submission target
 
@@ -101,12 +113,16 @@ Total: ~30 tests, fast suite under 30s.
 ## Submission go/no-go criteria
 
 - [x] Pipeline end-to-end tested on existing 4-bit IBM data
-- [x] Noisy-Aer recovery verified at target backend (ibm_kingston, 9/9 trials)
+- [x] Noisy-Aer recovery verified at target backend (ibm_kingston,
+      14/14 trials across two sweeps)
 - [x] Submission script dry-run passes
 - [x] Fetch script handles `extractor: "hnp"` branch
 - [x] All committed and pushed to `refactor/code-review-may2026`
-- [ ] **IBM open-plan budget refresh** (currently exhausted; refresh
-      expected ~2026-05-26 based on 28-day window from prior runs)
+- [x] **IBM open-plan budget refresh** (≈ 1m22s available at submission time)
+- [x] **SUBMITTED 2026-05-25**: Job ``d89s7c9789is7393nie0`` on ``ibm_kingston``
+- [x] **DECODED**: ``d = 6`` recovered, HNP rank 2, direct verify, top-3 in d-class.
 
-When the budget clears, run the submission command above and then
-`python scripts/fetch_result.py results/_pending_4bit_t6_dense_hnp_ibm.json`.
+The Phase 1 hardware result is the basis of the
+``test_phase1_hardware_result_replays`` regression test in
+``tests/test_hnp_verify.py`` — re-running it from the saved counts
+file always recovers d_true at rank 2 without any QPU.
