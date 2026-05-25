@@ -114,6 +114,8 @@ Re-running our actual submission (`d89s7c9789is7393nie0`) produces:
 - HNP rank 3: `d = 1` (anti-d partner, would have rescued if rank 2 had failed)
 - decode time: ≈ 0 s
 
+![Phase 1 diagnostic plot](results/shor_4bit_t6_1024shots_hnp_ibm.png)
+
 For the noisy-Aer prediction that matched this, see
 `docs/deepening_findings_2026-05-25.md` and the 14 / 14 sweep results.
 
