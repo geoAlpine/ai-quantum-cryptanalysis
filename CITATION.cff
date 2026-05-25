@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "quantum-ecc: Autonomous AI Agent Recovery of 22-bit ECDLP on IBM Quantum"
+title: "quantum-ecc: AI-Agent ECDLP Recovery on IBM Quantum (Phase 0 + Phase 1)"
 message: "If you use this work, please cite it as below."
 type: software
 authors:
@@ -8,7 +8,7 @@ authors:
     email: info@geoalpine.net
     affiliation: "GeoAlpine LLC (ジオアルピーヌ合同会社)"
     website: "https://geoalpine.net"
-  - name: "Claude Sonnet 4.6 (LLM agent, Anthropic)"
+  - name: "Claude Sonnet 4.6 / Opus 4.7 (LLM agent, Anthropic)"
     email: "noreply@anthropic.com"
 date-released: 2026-04-29
 license: MIT
@@ -20,20 +20,28 @@ keywords:
   - IBM-Quantum
   - Q-Day-Prize
   - AI-agent
+  - HNP-recovery
+  - signal-regime
 abstract: >
   An autonomous AI-agent–driven cryptanalysis pipeline for the Elliptic Curve
   Discrete Logarithm Problem (ECDLP), implemented end-to-end by Anthropic's
-  Claude Sonnet 4.6 via the Claude Code interface, demonstrated on IBM
-  Quantum Heron r2 hardware. The submission recovers a 22-bit (m=22) private
-  key — six algorithmic steps beyond Lelli's 17-bit Q-Day Prize Round-1
-  winner — using novel adaptive-counting and Stern-Brocot continued-fraction
-  lift extraction techniques.
+  Claude Sonnet 4.6 / Opus 4.7 via the Claude Code interface, demonstrated on IBM
+  Quantum Heron r2 hardware. Two qualitatively distinct results:
+  (Phase 0, 2026-04) 22-bit (m=22) private-key recovery — six algorithmic
+  steps beyond Lelli's 17-bit Q-Day Prize Round-1 winner — using
+  adaptive-counting and Stern-Brocot continued-fraction lift extraction
+  in the verification-filter regime; (Phase 1, 2026-05-25) 4-bit (m=3)
+  recovery on ibm_kingston via cross-shot Hidden Number Problem
+  (HNP) scoring + top-K verification — the first hardware ECDLP decode
+  whose recovery does not rely on per-shot verification-filter brute
+  force, demonstrating signal-regime recovery at the smallest non-
+  trivial scale.
 preferred-citation:
   type: software
   authors:
-    - family-names: "(Aoki)"
+    - family-names: "Aoki"
       given-names: "Yosuke"
-    - name: "Claude Sonnet 4.6"
+    - name: "Claude Sonnet 4.6 / Opus 4.7"
   title: "quantum-ecc"
   year: 2026
-  url: "https://github.com/<yourname>/quantum-ecc"
+  url: "https://github.com/geoAlpine/ai-quantum-cryptanalysis"
