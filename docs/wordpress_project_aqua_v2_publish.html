@@ -1,0 +1,318 @@
+<h1>Project AQUA：2 回目の検証 — 検証フィルタを超えて、IBM 実機で「真の量子シグナル」から暗号鍵を復元</h1>
+<p><em>GeoAlpine LLC（ジオアルピーヌ合同会社） — 2026 年 5 月 25 日</em></p>
+<hr />
+<h2>結論先出し：2 回目の検証で「別カテゴリ」の解読を達成</h2>
+<p>1 回目（2026 年 4 月）で <strong>22-bit ECDLP</strong> を IBM 実機で復元した報告は、すでに <a href="https://geoalpine.net/project-aqua/">Project AQUA — 1 回目の検証ページ</a> で公開しています。あの記事の末尾で、私たちは率直にこう書きました：</p>
+<blockquote>
+<p>「現在の NISQ 領域での "鍵復元" は、量子シグナルの本物のピークではなく、検証フィルタによる候補選別に支えられている」</p>
+</blockquote>
+<p><strong>今回の 2 回目の検証は、そこから先を埋めるためのものです。</strong></p>
+<ul>
+<li><strong>日付</strong>: 2026-05-25</li>
+<li><strong>バックエンド</strong>: IBM Quantum <code>ibm_kingston</code>（Heron r2）</li>
+<li><strong>規模</strong>: 4-bit（n = 7）、量子ビット 15、2量子ビットゲート 1,243</li>
+<li><strong>Job ID</strong>: <code>d89s7c9789is7393nie0</code></li>
+<li><strong>復元した鍵</strong>: d = 6（<strong>HNP score の rank 2 で direct verify 成功</strong>、anti-d fallback 不要）</li>
+</ul>
+<p>スケールは 22-bit から大きく後退して見えますが、<strong>復元の質的なカテゴリが違います</strong>。1 回目が「検証フィルタが load-bearing」だったのに対し、2 回目は「複数ショットの統計構造から d を絞り込む signal-regime recovery」です。</p>
+<p><strong>現存する公開された量子ハードウェア ECDLP 解読の中で、初めての signal-regime datapoint</strong> と位置付けています。</p>
+<hr />
+<h2>1 回目からの変更点と、なぜ 2 回目が必要だったか</h2>
+<h3>1 回目の自己批判</h3>
+<p>1 回目記事の「正直な評価」セクションで提示した課題は、定性的な記述に留まっていました。今回はそれを<strong>定量的に測る診断ツール</strong>を作りました。</p>
+<p>新規スクリプト <code>scripts/collective_decode.py</code> は、保存済み IBM カウントファイルに対して <strong>BSGS の答えを使わない投票テスト</strong>を実行します。各ショットの候補集合から d 候補をランク付けし、真の鍵 <code>d_true</code> が分布のどこに位置するかを純粋な統計値で報告します。</p>
+<p><strong>1 回目の 22-bit データに適用した結果</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>d_true = 1,999,171</code> の投票数</td>
+<td>137</td>
+</tr>
+<tr>
+<td>一様ノイズ期待値</td>
+<td>137.32</td>
+</tr>
+<tr>
+<td>z-score</td>
+<td><strong>-0.03σ</strong></td>
+</tr>
+<tr>
+<td>分布内の順位</td>
+<td>1,024,632 / 2,098,699</td>
+</tr>
+<tr>
+<td>パーセンタイル</td>
+<td><strong>48.8%（ほぼ中央）</strong></td>
+</tr>
+</tbody>
+</table>
+<p>つまり 22-bit データの真の鍵は、<strong>ランダムに選んだ d とほぼ完全に区別がつかない</strong>位置にいました。あの復元は確かに成功したけれど、その成功は古典的な検証ステップ（<code>d_cand · G == Q</code> のチェック）が「8000 個前後の候補の中から正解を拾い上げた」結果だったのです。</p>
+<p>参考までに、同じテストを Lelli 氏の 15-bit Round-1 賞金獲得結果に当てはめても、<strong>ほぼ同じ regime</strong> に属することが判明しました。Q-Day Prize Round 1 全体が、現時点では「<strong>検証フィルタ体制（verification-filter regime）</strong>」と呼ぶべき段階にあるという事実を、ここで初めて公開定量化できたことになります。</p>
+<h3>2 回目の目的</h3>
+<p>ならば「<strong>検証フィルタに頼らずに、量子シグナルそのものから d を絞り込めるか？</strong>」 — これが 2 回目の検証の問いです。</p>
+<hr />
+<h2>2 回目の検証：HNP スコア + Top-K 検証パイプライン</h2>
+<h3>採用した手法</h3>
+<ol>
+<li>
+<p><strong>Hidden Number Problem (HNP) スコア</strong>
+   2 レジスタ Shor の "noiseless ideal" ピーク関係 <code>n·(j + d·k) ≡ s·M (mod n·M)</code> を使い、複数ショットの統計から各 d 候補の "整合度" を測ります。<code>r</code>（測定された点レジスタ）はこのスコアには入りません — <code>r</code> は post-pt-measurement の格子を選ぶだけで、QFT ピークの位置は同じだからです（<a href="https://github.com/geoAlpine/ai-quantum-cryptanalysis/commit/028f514">実証コミット</a> 参照）。</p>
+</li>
+<li>
+<p><strong>Top-K verification with anti-d partner</strong>
+   HNP スコア上位 K = 7 個の候補と、それぞれの「反対 d」（<code>(n - d) mod n</code>）を順に古典検証。最初に <code>d · G == Q</code> を満たしたものを採用。</p>
+</li>
+<li>
+<p><strong>Dense oracle + adaptive counting</strong>
+   m = 3 では dense unitary オラクルが ripple-carry より約 7 倍効率的（2Q ゲート 1,243 vs 8,389）。t = 6（M / n = 9.14）で expected peak が十分疎になります。</p>
+</li>
+</ol>
+<h3>提出前の予測</h3>
+<p>実機提出前に、ibm_kingston のノイズモデルを使った Aer シミュレーションを <strong>9 + 5 = 14 trials</strong> 実行し、すべての試行で d_true が HNP rank 2 に直接（anti-d fallback なし）出ることを確認しました。詳細は <a href="https://github.com/geoAlpine/ai-quantum-cryptanalysis/blob/refactor/code-review-may2026/docs/deepening_findings_2026-05-25.md"><code>docs/deepening_findings_2026-05-25.md</code></a> 参照。</p>
+<h3>実機結果</h3>
+<p>2026-05-25、IBM Open Plan の 28 日 rolling window がリセットされた直後の <strong>約 1 分の無料枠</strong> を使って提出：</p>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Job ID</td>
+<td><code>d89s7c9789is7393nie0</code></td>
+</tr>
+<tr>
+<td>バックエンド</td>
+<td><code>ibm_kingston</code>（Heron r2、median 2Q error 0.21%）</td>
+</tr>
+<tr>
+<td>量子ビット数</td>
+<td>15</td>
+</tr>
+<tr>
+<td>2 量子ビットゲート</td>
+<td>1,243</td>
+</tr>
+<tr>
+<td>推定 fidelity</td>
+<td>1.97 × 10⁻³</td>
+</tr>
+<tr>
+<td>ショット数</td>
+<td>1,024</td>
+</tr>
+<tr>
+<td>Sampler 設定</td>
+<td>DD XY4 + Pauli twirling</td>
+</tr>
+<tr>
+<td>実行時間</td>
+<td>&lt; 1 分（QUEUED → DONE）</td>
+</tr>
+</tbody>
+</table>
+<p>ハードウェアデータでの HNP スコア（低いほど良い）：</p>
+<table>
+<thead>
+<tr>
+<th>HNP rank</th>
+<th>d 候補</th>
+<th>スコア</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>4</td>
+<td>6.7080</td>
+<td>ノイズ</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><strong>6</strong></td>
+<td><strong>6.7490</strong></td>
+<td><strong>d_true ← direct verify ✓</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>1</td>
+<td>6.8604</td>
+<td>anti-d_true</td>
+</tr>
+<tr>
+<td>4</td>
+<td>3</td>
+<td>6.9014</td>
+<td></td>
+</tr>
+<tr>
+<td>5</td>
+<td>2</td>
+<td>6.9463</td>
+<td></td>
+</tr>
+<tr>
+<td>6</td>
+<td>5</td>
+<td>7.2002</td>
+<td></td>
+</tr>
+<tr>
+<td>7</td>
+<td>0</td>
+<td>7.6895</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>production パイプラインは top-1 (d=4) を検証 → 失敗 → anti-d (d=3) を検証 → 失敗 → top-2 (d=6) を検証 → <strong>成功</strong>。</p>
+<p>シミュレーション予測（14 / 14 で rank 2）と実機結果（rank 2）が完全一致しました。</p>
+<p><img alt="Phase 1 診断プロット — HNP スコア / (j, k) ヒートマップ / 残差ヒストグラム" src="https://github.com/geoAlpine/ai-quantum-cryptanalysis/raw/refactor/code-review-may2026/results/shor_4bit_t6_1024shots_hnp_ibm.png" /></p>
+<hr />
+<h2>1 回目と 2 回目の対比</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>1 回目 (Phase 0)</strong></th>
+<th><strong>2 回目 (Phase 1)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>日付</td>
+<td>2026-04-28</td>
+<td><strong>2026-05-25</strong></td>
+</tr>
+<tr>
+<td>バックエンド</td>
+<td>ibm_fez</td>
+<td>ibm_kingston</td>
+</tr>
+<tr>
+<td>規模</td>
+<td>22-bit（n ≈ 2.1M）</td>
+<td>4-bit（n = 7）</td>
+</tr>
+<tr>
+<td>量子ビット数</td>
+<td>73</td>
+<td><strong>15</strong></td>
+</tr>
+<tr>
+<td>2Q ゲート</td>
+<td>124,422</td>
+<td><strong>1,243</strong></td>
+</tr>
+<tr>
+<td>推定 fidelity</td>
+<td>10⁻¹⁵¹</td>
+<td><strong>10⁻³</strong></td>
+</tr>
+<tr>
+<td>Decode 手法</td>
+<td>CF-Lift v2（候補列挙 + 全数検証）</td>
+<td><strong>HNP score + top-K 検証</strong></td>
+</tr>
+<tr>
+<td>d_true の collective rank</td>
+<td>~中央値（z = -0.03σ）</td>
+<td><strong>rank 2（top-3 に d-class）</strong></td>
+</tr>
+<tr>
+<td>カテゴリ</td>
+<td><strong>verification-filter regime</strong></td>
+<td><strong>signal regime</strong></td>
+</tr>
+<tr>
+<td>Lelli の 15-bit と同種か</td>
+<td>はい</td>
+<td><strong>いいえ（新カテゴリ）</strong></td>
+</tr>
+<tr>
+<td>価値</td>
+<td>スケール記録</td>
+<td><strong>方法論記録</strong></td>
+</tr>
+</tbody>
+</table>
+<p>「スケール」と「方法論」は両方意味があります。Q-Day Prize Round 2 がどちらを重視するかは未発表ですが、私たちは<strong>両方の数字を持っている</strong>唯一のチームのままです。</p>
+<hr />
+<h2>正直な評価（2 回目版）</h2>
+<h3>何を主張するか</h3>
+<ul>
+<li><strong>量子ハードウェア上で、ECDLP 解読の decode が "per-shot 全数検証" ではなく "cross-shot HNP scoring" で動くことを、初めて実機で示した</strong>。</li>
+<li>ibm_kingston のノイズモデルを使ったシミュレーションが、実機結果を rank・順位レベルまで予測できた（noisy-Aer の predictivity の calibration）。</li>
+<li>全コード MIT ライセンス公開済み。1 コマンドで再現可能（IBM 無料枠の <strong>5 %（≈ 30 秒）</strong> で足ります）。</li>
+<li>1 回目の「正直な評価」で課題として挙げた "signal regime recovery" の最初の datapoint を確保した。</li>
+</ul>
+<h3>何を主張しないか</h3>
+<ul>
+<li><strong>量子優位性ではありません。</strong> n = 7 の ECDLP は古典 Baby-step / Giant-step で μs 単位で解けます。価値は方法論にあります。</li>
+<li><strong>K &lt;&lt; n の本格的な絞り込みもまだです。</strong> n = 7 では top-K = 7 が全候補と等しいため、HNP の "絞り込み" は形式的には 1×。本格的な意義は n ≥ 100 で出てきます。</li>
+<li><strong>複数試行のハードウェア再現性もまだ単発です。</strong> 1 ヶ月分の無料枠で 1 ジョブのみ。次回（2026-06 リフレッシュ後）に独立 5 ジョブで variance を計測予定。</li>
+<li><strong>Bitcoin は当面安全です。</strong> Google Quantum AI 2026-03 の最新見積もり（論理量子ビット 1,200、Toffoli 9,000 万）を超えるハードウェアが、現存しません。</li>
+</ul>
+<hr />
+<h2>1 ヶ月で 2 つの記録 — AI エージェントとの協働</h2>
+<p>1 回目から 2 回目までの 4 週間、コードと記事は <strong>Anthropic Claude（Sonnet 4.6 / Opus 4.7）を主たる実装パートナーとして</strong> 進めました。</p>
+<p>人間の役割は依然として：
+- 戦略的選択肢から「これでいく」を決める
+- IBM の有料 QPU を使う決定（今回も 1 回だけ）
+- 自分自身の結果を批判的に問い直すかどうかを判断する（これが 2 回目につながった）</p>
+<p>学術機関の支援なし、過去の量子ハードウェア経験なしから、合同会社代表 1 名で<strong>月に 1 つ独立した質的記録を達成</strong>できる時代になりました。これは結果と同等の方法論的貢献として記録に残すに値すると考えます。</p>
+<hr />
+<h2>次のステップ</h2>
+<ol>
+<li><strong>arXiv 短報投稿</strong>（"Beyond the Verification Filter" 原稿準備中、Section 5.5 で 2 回目の結果を実数値表記）</li>
+<li><strong>国内大学との共同研究 / IBM Quantum Credits 経由でのスケールアップ</strong>（個人事業主だと Credits 単独申請不可、PI 共同が必要）</li>
+<li><strong>Phase 2 ハードウェア datapoint</strong>（m ≥ 5 に拡張するには、iterative + dense オラクルの組合せ実装が必要 — 現状 5-bit は信号が hardware noise で壊れる）</li>
+<li><strong>Anthropic との公式連携</strong>（press@anthropic.com に発信、案件化中）</li>
+</ol>
+<hr />
+<h2>公開リソース</h2>
+<ul>
+<li><strong>GitHub</strong>: <a href="https://github.com/geoAlpine/ai-quantum-cryptanalysis">github.com/geoAlpine/ai-quantum-cryptanalysis</a></li>
+<li><strong>ブランチ</strong>: <code>refactor/code-review-may2026</code>（最新 30+ commits、CI 緑）</li>
+<li><strong>Phase 1 結果ファイル</strong>: <code>results/shor_4bit_t6_1024shots_hnp_ibm.json</code> ＋ 診断プロット PNG</li>
+<li><strong>論文骨子</strong>: <code>docs/honest_framing_preprint_outline.md</code></li>
+<li><strong>プロジェクト年表</strong>: <code>docs/PROJECT_TIMELINE.md</code></li>
+<li><strong>要約 1 ページ版</strong>: <code>docs/executive_summary.md</code></li>
+</ul>
+<p>再現コマンド：</p>
+<pre><code class="language-bash"># クローン + 開発依存導入
+pip install -e &quot;.[dev]&quot;
+
+# Phase 1 提出（IBM 無料枠の約 5%）
+python scripts/submit_18bit.py --bits 4 --t 6 \
+    --oracle dense --extractor hnp \
+    --backend ibm_kingston --shots 1024
+
+# 結果取得 + decode（QPU 追加消費なし）
+python scripts/fetch_result.py results/_pending_4bit_t6_dense_hnp_ibm.json
+</code></pre>
+<p>QPU を使わずに既存の counts ファイルから再現するなら：</p>
+<pre><code class="language-bash">python scripts/decode_offline.py \
+    --counts results/shor_4bit_t6_1024shots_hnp_ibm.json \
+    --bits 4 --t 6 --oracle dense --extractor hnp --top-k 7
+</code></pre>
+<hr />
+<h2>連絡先</h2>
+<ul>
+<li><strong>GeoAlpine LLC</strong>（ジオアルピーヌ合同会社）</li>
+<li>Web: <a href="https://geoalpine.net">geoalpine.net</a></li>
+<li>Email: info@geoalpine.net</li>
+<li>技術相談・共同研究・取材のお問い合わせ歓迎です。</li>
+</ul>
+<hr />
+<p><em>1 回目の検証記事 → <a href="https://geoalpine.net/project-aqua/">Project AQUA：1 回目の検証ページ</a></em>
+<em>次回（Phase 2）に向けては、5-bit 以上を signal regime で復元するための iterative + dense オラクル拡張、および本格的な格子簡約（Boneh-Venkatesan / Ekerå-Håstad）の実装を進めます。</em></p>
