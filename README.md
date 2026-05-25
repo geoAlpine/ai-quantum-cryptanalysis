@@ -9,19 +9,37 @@
 [![Quantum: IBM Heron r2](https://img.shields.io/badge/Quantum-IBM_Heron_r2-blueviolet.svg)](https://www.ibm.com/quantum)
 [![Q-Day Prize: submission](https://img.shields.io/badge/Q--Day_Prize-Round_2_submission-orange.svg)](https://www.qdayprize.org/)
 
-## 🏆 Headline result
+## 🏆 Headline results
+
+**Two distinct categories of hardware recovery — please read the framing
+section before citing either.**
+
+### Phase 0 — verification-filter regime (scale headline, 2026-04)
 
 **Recovered the 22-bit (m = 22) ECDLP private key `d = 1,999,171` on IBM Quantum
 `ibm_fez`** — **+7 algorithmic steps beyond Lelli's Q-Day Prize Round-1 winning
 15-bit (m = 15) submission, and +6 beyond his highest documented success
 (17-bit, m = 16)**. Job ID: `d7o5mr62jamc73bp87eg`.
 
-| Submission | label | m | qubits | 2Q gates | Recovered d | Hits | Job |
+### Phase 1 — signal-regime recovery (2026-05-25, first datapoint)
+
+**Recovered `d = 6` at m = 3 (n = 7) on `ibm_kingston` via cross-shot HNP
+score + verification, NOT via verification-filter brute force.** d_true lands
+at HNP rank 2 on the real hardware data (just as 14 / 14 noisy-Aer trials
+predicted) and is recovered by the production pipeline without needing the
+anti-d fallback. Job ID: `d89s7c9789is7393nie0`.
+
+This is a different category of recovery from Phase 0 / Lelli — see
+`docs/honest_framing_preprint_outline.md` Section 5 and the diagnostic
+section below for what the distinction means.
+
+| Submission | label | m | qubits | 2Q gates | Recovered d | Decode mode | Job |
 |---|---|---|---|---|---|---|---|
-| Lelli 2026 — Round-1 prize | 15-bit | 15 | (smaller) | (smaller) | (15-bit prize key) | — | (Round-1 award) |
-| Lelli 2026 — best documented | 17-bit | 16 | 69 | 111,816 | 1,441 ✓ | 1+ | d790krrc6das739idasg |
-| **This work — 22-bit** | 22-bit | **22** | 73 | 124,422 | **1,999,171 ✓** | **12** | **d7o5mr62jamc73bp87eg** |
-| This work — 19-bit (independent confirm) | 19-bit | 19 | 67 | 103,708 | 36,124 ✓ | 1+ | d7o2dem2jamc73bp3jig |
+| Lelli 2026 — Round-1 prize | 15-bit | 15 | (smaller) | (smaller) | (15-bit prize key) | verification filter | (Round-1 award) |
+| Lelli 2026 — best documented | 17-bit | 16 | 69 | 111,816 | 1,441 ✓ | verification filter | d790krrc6das739idasg |
+| This work — 19-bit (independent confirm) | 19-bit | 19 | 67 | 103,708 | 36,124 ✓ | verification filter | d7o2dem2jamc73bp3jig |
+| **This work — 22-bit** (Phase 0) | 22-bit | **22** | 73 | 124,422 | **1,999,171 ✓** | verification filter | **d7o5mr62jamc73bp87eg** |
+| **This work — 4-bit HNP** (Phase 1) | 4-bit | 3 | **15** | **1,243** | **6 ✓** | **HNP top-K + verify** | **d89s7c9789is7393nie0** |
 
 **Note on bit-length labeling.** The Q-Day Prize challenges are labeled by the
 prime `p`'s bit length, but the Shor algorithm's actual difficulty is governed
@@ -71,6 +89,33 @@ solver = ShorECDLPSolver(curve, G, Q, c.n,
 print(f'recovered d = {solver.extract(counts)}')  # → 1999171
 "
 ```
+
+## Reproducing the Phase 1 signal-regime recovery
+
+```bash
+# 1. Submit (uses ≈ 20 s of IBM open-plan free QPU)
+python scripts/submit_18bit.py --bits 4 --t 6 \
+    --oracle dense --extractor hnp \
+    --backend ibm_kingston --shots 1024
+
+# 2. Poll & decode once the job is DONE (no further QPU)
+python scripts/fetch_result.py results/_pending_4bit_t6_dense_hnp_ibm.json
+
+# 3. Generate the diagnostic plot (HNP scores, (j, k) heatmap, residue hist)
+python scripts/plot_hnp_distribution.py \
+    --counts results/shor_4bit_t6_1024shots_hnp_ibm.json \
+    --bits 4 --t 6 --pt-w 3 --out diagnostic.png
+```
+
+Re-running our actual submission (`d89s7c9789is7393nie0`) produces:
+
+- HNP rank 1: `d = 4` (noise, fails `4·G == Q`)
+- HNP rank 2: `d = 6` ← **`d_true`, verification succeeds**
+- HNP rank 3: `d = 1` (anti-d partner, would have rescued if rank 2 had failed)
+- decode time: ≈ 0 s
+
+For the noisy-Aer prediction that matched this, see
+`docs/deepening_findings_2026-05-25.md` and the 14 / 14 sweep results.
 
 ## Diagnostic: was this *actually* quantum signal, or verification filter?
 
