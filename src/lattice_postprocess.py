@@ -421,10 +421,131 @@ def hnp_recover_with_verification(
     }
 
 
+def hnp_recover_lattice(
+    shots: list[tuple[int, int, int]],
+    n: int,
+    t: int,
+    *,
+    max_shots: int = 64,
+    block_size: int = 30,
+    expected_d: Optional[int] = None,
+) -> HNPResult:
+    """q-ary HNP lattice recovery of ``d`` from Shor-ECDLP shots.
+
+    Corrected formulation per ``docs/lattice_hnp_design.md`` — fixes
+    three bugs in the legacy ``hnp_recover`` prototype:
+
+    1. Adds q-ary modulus rows for the ``(mod n·M)`` wrap of the Shor
+       relation ``n·(j + d·k) ≡ s·M (mod n·M)``. Without these rows
+       the lattice can only solve exact equalities and LLL collapses to
+       the trivial zero vector.
+    2. Scales the d-tracker by ``W_d = ⌈M/(2n)⌉`` so the d coordinate
+       contributes comparably to the per-shot residual; with ``W_d=1``
+       any d is "free" and reduction zeroes the d coordinate.
+    3. Scales the Kannan-embedding sentinel by ``⌈√N · M/(2n)⌉`` so
+       the embedded short vector reliably contains the target.
+
+    Basis layout (``(2N + 1) × (N + 1)``):
+
+      Row 0          d-generator   ``[ n·k_1, ..., n·k_N,  W_d ]``
+      Row 1..N       s_i           ``[ 0,..., -M (col i-1),..., 0 ]``
+      Row N+1..2N    modulus n·M   ``[ 0,..., n·M (col i-1),..., 0 ]``
+
+    Target  ``[ -n·j_1, ..., -n·j_N,  0 ]`` is Kannan-embedded into an
+    extra column whose only nonzero entry is ``sentinel`` (on the
+    target row).
+
+    After LLL/BKZ, scan rows for ``|last col| == sentinel``; the one
+    with the smallest residual norm encodes ``±d_true·W_d`` in the
+    d-tracker column.
+
+    See Ekerå (2017) eprint.iacr.org/2017/1027 §3 for the modular
+    reduction underlying this construction.
+    """
+    from fpylll import IntegerMatrix, LLL, BKZ
+
+    M = 1 << t
+    if max_shots is not None and len(shots) > max_shots:
+        shots = shots[:max_shots]
+    N = len(shots)
+    if N == 0:
+        return HNPResult(d_candidate=0, confidence=0.0,
+                         short_vector_norm=0.0, used_shots=0)
+
+    W_d = max(1, M // (2 * n))
+    sentinel = max(1, int((N ** 0.5) * M / (2 * n)))
+
+    # (2N + 1) generators, (N + 1) columns.
+    A = IntegerMatrix(2 * N + 1, N + 1)
+    for i, (_j, k, _r) in enumerate(shots):
+        A[0, i] = n * k
+    A[0, N] = W_d
+    for i in range(N):
+        A[1 + i, i] = -M
+        A[1 + N + i, i] = n * M
+
+    target = [-n * j for (j, _k, _r) in shots] + [0]
+
+    # Kannan embedding: append target row with sentinel in a new last col.
+    Aem = IntegerMatrix(A.nrows + 1, A.ncols + 1)
+    for r in range(A.nrows):
+        for c in range(A.ncols):
+            Aem[r, c] = A[r, c]
+        Aem[r, A.ncols] = 0
+    for c in range(A.ncols):
+        Aem[A.nrows, c] = target[c]
+    Aem[A.nrows, A.ncols] = sentinel
+
+    LLL.reduction(Aem)
+    if block_size > 2:
+        BKZ.reduction(Aem, BKZ.Param(block_size=block_size))
+
+    last_col = A.ncols      # the new sentinel column (index N+1)
+    d_col = N               # the d-tracker column inside the original basis
+
+    best_d = None
+    best_norm = float("inf")
+    second_norm = float("inf")
+    for r in range(Aem.nrows):
+        sval = Aem[r, last_col]
+        if abs(sval) != sentinel:
+            continue
+        val = Aem[r, d_col]
+        # If sval == +sentinel: short vec = target - α·row_0 - ... ,
+        # so d-tracker holds -α·W_d. If sval == -sentinel, sign is flipped.
+        if sval == sentinel:
+            val = -val
+        d_raw = (round(val / W_d)) % n
+        residual_sq = sum(int(Aem[r, c]) ** 2 for c in range(N))
+        if residual_sq < best_norm:
+            second_norm = best_norm
+            best_norm = residual_sq
+            best_d = d_raw
+        elif residual_sq < second_norm:
+            second_norm = residual_sq
+
+    if best_d is None:
+        best_d = 0
+
+    confidence = (
+        1.0 - (best_norm / second_norm)
+        if 0 < second_norm < float("inf")
+        else 0.0
+    )
+
+    return HNPResult(
+        d_candidate=int(best_d),
+        confidence=float(confidence),
+        short_vector_norm=float(best_norm ** 0.5) if best_norm < float("inf") else 0.0,
+        used_shots=N,
+    )
+
+
 __all__ = [
     "HNPResult",
     "build_hnp_lattice",
     "hnp_recover",
+    "hnp_recover_lattice",
     "hnp_score",
     "hnp_score_search",
     "hnp_recover_with_verification",
