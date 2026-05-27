@@ -1,0 +1,188 @@
+{
+  "generated_at": "2026-05-28",
+  "method": "2 sim + 2 real-hardware cells",
+  "cells": [
+    {
+      "label": "m=3 noiseless",
+      "bits": 4,
+      "n": 7,
+      "m": 3,
+      "t": 6,
+      "d_true": 6,
+      "noise": "noiseless",
+      "shots": 4096,
+      "M_over_n": 9.143,
+      "transpiled_2Q_gates": 0,
+      "est_fidelity": 1.0,
+      "run_sec": 0.01,
+      "rank_d_true": 2,
+      "score_gap_pct": 20.206,
+      "argmax_d": 1,
+      "argmax_score": 2.23,
+      "d_true_score": 2.7947,
+      "top5": [
+        [
+          1,
+          2.23
+        ],
+        [
+          6,
+          2.7947
+        ],
+        [
+          3,
+          4.8433
+        ],
+        [
+          4,
+          5.394
+        ],
+        [
+          2,
+          7.0186
+        ]
+      ],
+      "recovery_d": 6,
+      "recovery_success": true,
+      "recovery_rank": 1,
+      "via_anti_d": true
+    },
+    {
+      "label": "m=3 ibm_kingston (real hw)",
+      "bits": 4,
+      "n": 7,
+      "m": 3,
+      "t": 6,
+      "d_true": 6,
+      "noise": "real:ibm_kingston",
+      "shots": 1024,
+      "M_over_n": 9.143,
+      "transpiled_2Q_gates": 1243,
+      "est_fidelity": 0.001968291273127846,
+      "unique_outcomes": 1001,
+      "data_path": "results/shor_4bit_t6_1024shots_hnp_ibm_phase1.json",
+      "rank_d_true": 2,
+      "score_gap_pct": 0.608,
+      "argmax_d": 4,
+      "argmax_score": 6.708,
+      "d_true_score": 6.749,
+      "top5": [
+        [
+          4,
+          6.708
+        ],
+        [
+          6,
+          6.749
+        ],
+        [
+          1,
+          6.8604
+        ],
+        [
+          3,
+          6.9014
+        ],
+        [
+          2,
+          6.9463
+        ]
+      ],
+      "recovery_d": 6,
+      "recovery_success": true,
+      "recovery_rank": 2,
+      "via_anti_d": false
+    },
+    {
+      "label": "m=5 noiseless",
+      "bits": 6,
+      "n": 31,
+      "m": 5,
+      "t": 8,
+      "d_true": 18,
+      "noise": "noiseless",
+      "shots": 2048,
+      "M_over_n": 8.258,
+      "transpiled_2Q_gates": 0,
+      "est_fidelity": 1.0,
+      "run_sec": 1.59,
+      "rank_d_true": 12,
+      "score_gap_pct": 5.253,
+      "argmax_d": 13,
+      "argmax_score": 4.6323,
+      "d_true_score": 5.4692,
+      "top5": [
+        [
+          13,
+          4.6323
+        ],
+        [
+          7,
+          4.8892
+        ],
+        [
+          11,
+          4.9209
+        ],
+        [
+          17,
+          4.9863
+        ],
+        [
+          9,
+          5.0601
+        ]
+      ],
+      "recovery_d": 18,
+      "recovery_success": true,
+      "recovery_rank": 1,
+      "via_anti_d": true
+    },
+    {
+      "label": "m=5 ibm_kingston (real hw)",
+      "bits": 6,
+      "n": 31,
+      "m": 5,
+      "t": 8,
+      "d_true": 18,
+      "noise": "real:ibm_kingston",
+      "shots": 1024,
+      "M_over_n": 8.258,
+      "transpiled_2Q_gates": 29851,
+      "est_fidelity": 1.0394015033895263e-65,
+      "unique_outcomes": 1024,
+      "data_path": "results/shor_6bit_t8_1024shots_hnp_ibm_phase2.json",
+      "rank_d_true": 31,
+      "score_gap_pct": 0.798,
+      "argmax_d": 14,
+      "argmax_score": 5.46,
+      "d_true_score": 6.168,
+      "top5": [
+        [
+          14,
+          5.46
+        ],
+        [
+          15,
+          5.5039
+        ],
+        [
+          5,
+          5.5586
+        ],
+        [
+          8,
+          5.5908
+        ],
+        [
+          4,
+          5.6396
+        ]
+      ],
+      "recovery_d": null,
+      "recovery_success": false,
+      "recovery_rank": null,
+      "via_anti_d": null
+    }
+  ]
+}
