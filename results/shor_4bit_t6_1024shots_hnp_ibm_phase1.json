@@ -45,7 +45,7 @@
   "verified_via_anti_d": false,
   "recovered_d": 6,
   "success": true,
-  "elapsed_seconds": 0.009959936141967773,
+  "elapsed_seconds": 0.00797128677368164,
   "unique_outcomes": 1001,
   "counts": {
     "011000111011101": 2,

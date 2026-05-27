@@ -138,9 +138,17 @@ def test_phase1_hardware_result_replays():
     import os
 
     repo = os.path.join(os.path.dirname(__file__), "..")
-    counts_path = os.path.join(
-        repo, "results", "shor_4bit_t6_1024shots_hnp_ibm.json"
-    )
+    # The original Phase 1 run was at the legacy unsuffixed path; the
+    # 2026-05-27 reproduction series (Rep 1-3) renamed Phase 1 to
+    # ``_phase1`` so each trial has its own immutable artifact. Look at
+    # either to remain robust under future renames.
+    for candidate in (
+        "shor_4bit_t6_1024shots_hnp_ibm_phase1.json",
+        "shor_4bit_t6_1024shots_hnp_ibm.json",
+    ):
+        counts_path = os.path.join(repo, "results", candidate)
+        if os.path.exists(counts_path):
+            break
     if not os.path.exists(counts_path):
         pytest.skip("Phase 1 hardware counts not present in this checkout")
 
