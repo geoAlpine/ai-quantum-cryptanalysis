@@ -1,0 +1,21 @@
+=== T-gate decomposition for fault-tolerant Shor-ECDLP ===
+
+Config                 qbits         T    CNOT  1qCliff  meas      phys ops ≈ T×5000
+-----------------------------------------------------------------------------------------------
+  m=3 dense (Phase 1)       15   198,166     643   322915    15            990,830,000
+  m=5 ripple                31    17,564   7,398    21018    22             87,820,000
+  m=7 ripple                37    24,182  11,194    28736    26            120,910,000
+  m=8 ripple                41    30,608  14,092    37110    29            153,040,000
+  m=8 iterative             23    30,204  13,906       -1    -1            151,020,000 (est)
+  m=10 iterative            27    44,443  20,462       -1    -1            222,215,000 (est)
+  m=12 iterative            31    61,029  28,098       -1    -1            305,145,000 (est)
+  m=15 iterative            37    91,680  42,210       -1    -1            458,400,000 (est)
+
+Interpretation:
+- T-count drives the magic-state distillation budget.
+- 1 T gate ≈ 1 magic state ≈ 1000-10000 physical ops in FT.
+- For m=15 we're already in the millions of magic states — this
+  is the scale that requires multi-day wall time even on Helios.
+
+FT cost = (T × distillation_overhead) + (CNOT × routing_overhead)
+Surface code routing per logical CNOT ≈ 100 phys ops at d=15.
