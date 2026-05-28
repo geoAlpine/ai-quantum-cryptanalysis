@@ -1,0 +1,48 @@
+Shot count per config: 1024
+Rates (Azure Standard plan): $12.5/HQC (hardware), $1.25/eHQC (emulator). Native compile trims ~15%.
+
+Config                 qbits    n_2q   HQC raw     eHQC $       HQC $  notes
+---------------------------------------------------------------------------------------------------------
+  Phase 1 baseline          15     643     1,327  $ 1,658.42  $16,584.20  
+  Phase 2 (m=5 dense)       21   16061    32,557  $40,696.29  $406,962.95  
+  Phase 2 ripple            31    7398    14,208  $17,760.60  $177,606.02  
+  m=7 ripple                37   11194    21,502  $26,877.82  $268,778.24  
+  m=8 ripple                41   14092    27,068  $33,835.37  $338,353.67  
+  m=8 iterative             23   13906    26,715  $33,393.64  $333,936.39  
+  m=10 ripple               49   20722    39,814  $49,767.17  $497,671.68  
+  m=10 iterative            27   20462    39,313  $49,141.35  $491,413.51  
+  m=12 iterative            31   28098    53,991  $67,488.73  $674,887.30  
+  m=15 iterative            37   42210    81,123  $101,404.08  $1,014,040.84  
+
+Notes:
+- Native compile trim = 15% (pytket-quantinuum offline-API benchmark,
+  2026-05-28; dense oracle gets ~30% reduction, ripple ~13%).
+- Min-shot study (2026-05-28) shows N=16 sufficient for d-class top-3
+  on Helios-fidelity emulator — divide above HQC by 64 (1024 / 16)
+  for the low-shot regime.
+- Iterative QPE saves qubits but not HQC; m=8+ should use it on
+  Quantinuum to fit within 56-qubit H2 / 98-qubit Helios capacity.
+Shot count per config: 16
+Rates (Azure Standard plan): $12.5/HQC (hardware), $1.25/eHQC (emulator). Native compile trims ~15%.
+
+Config                 qbits    n_2q   HQC raw     eHQC $       HQC $  notes
+---------------------------------------------------------------------------------------------------------
+  Phase 1 baseline          15     643        25  $    31.14  $   311.42  fits $500 free (emulator)
+  Phase 2 (m=5 dense)       21   16061       513  $   641.11  $ 6,411.09  
+  Phase 2 ripple            31    7398       226  $   282.74  $ 2,827.39  fits $500 free (emulator)
+  m=7 ripple                37   11194       340  $   425.20  $ 4,251.95  fits $500 free (emulator)
+  m=8 ripple                41   14092       427  $   533.91  $ 5,339.07  
+  m=8 iterative             23   13906       422  $   527.01  $ 5,270.05  
+  m=10 ripple               49   20722       626  $   782.84  $ 7,828.41  
+  m=10 iterative            27   20462       618  $   773.06  $ 7,730.63  
+  m=12 iterative            31   28098       848  $ 1,059.74  $10,597.41  
+  m=15 iterative            37   42210     1,272  $ 1,589.67  $15,896.68  
+
+Notes:
+- Native compile trim = 15% (pytket-quantinuum offline-API benchmark,
+  2026-05-28; dense oracle gets ~30% reduction, ripple ~13%).
+- Min-shot study (2026-05-28) shows N=16 sufficient for d-class top-3
+  on Helios-fidelity emulator — divide above HQC by 64 (1024 / 16)
+  for the low-shot regime.
+- Iterative QPE saves qubits but not HQC; m=8+ should use it on
+  Quantinuum to fit within 56-qubit H2 / 98-qubit Helios capacity.

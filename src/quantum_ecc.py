@@ -30,6 +30,46 @@ def load_token() -> str:
     return token
 
 
+def _read_env_kv(key: str) -> str:
+    env_file = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if os.path.exists(env_file):
+        for line in open(env_file):
+            line = line.strip()
+            if line.startswith(f"{key}="):
+                return line.split("=", 1)[1]
+    return os.environ.get(key, "")
+
+
+def load_azure_credentials() -> dict:
+    """Load Azure Quantum Workspace credentials from .env.
+
+    Expected .env keys (see https://learn.microsoft.com/azure/quantum):
+      AZURE_QUANTUM_RESOURCE_ID  — full Azure resource ID of the Workspace
+                                   (looks like /subscriptions/.../resourceGroups/.../
+                                    providers/Microsoft.Quantum/Workspaces/...)
+      AZURE_QUANTUM_LOCATION     — Azure region (e.g. "japaneast", "westus")
+
+    Authentication uses DefaultAzureCredential — `az login` once in the
+    shell, or environment variables (AZURE_TENANT_ID + AZURE_CLIENT_ID +
+    AZURE_CLIENT_SECRET) for service-principal auth.
+
+    Returns a dict suitable for ``Workspace(**load_azure_credentials())``.
+    """
+    resource_id = _read_env_kv("AZURE_QUANTUM_RESOURCE_ID")
+    location = _read_env_kv("AZURE_QUANTUM_LOCATION")
+    if not resource_id:
+        raise ValueError(
+            ".env に AZURE_QUANTUM_RESOURCE_ID が設定されていません — "
+            "Azure Portal > Quantum Workspace > Overview の Resource ID を貼ってください"
+        )
+    if not location:
+        raise ValueError(
+            ".env に AZURE_QUANTUM_LOCATION が設定されていません — "
+            "例: japaneast / westus / eastus"
+        )
+    return {"resource_id": resource_id, "location": location}
+
+
 def run_on_ionq(circuit: QuantumCircuit, shots: int = 200) -> dict[str, int]:
     """
     Run on IonQ Aria via AWS Braket.

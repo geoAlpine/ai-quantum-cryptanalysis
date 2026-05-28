@@ -110,10 +110,22 @@ def main():
         ("m=15 iterative",      15, 17, "ripple", True),
     ]
 
-    print(f"Shot count per config: {args.shots}\n")
-    print(f"{'Config':<22} {'qbits':>5} {'n_1q':>7} {'n_2q':>7} {'n_m':>5} "
-          f"{'HQC':>10}  est $ @ $5/$10/$50 per HQC")
-    print("-" * 95)
+    # Confirmed rates from Microsoft Azure Quantum pricing page (2026-05-29):
+    # - Standard plan: $125,000/month for 10,000 HQCs → $12.50 / HQC
+    #                            + 100,000 eHQCs → $1.25 / eHQC
+    # - Premium plan : $175,000/month for 17,000 HQCs → $10.29 / HQC
+    #                            + 170,000 eHQCs → $1.03 / eHQC
+    # - $500 free credit for new Azure accounts (≈ 40 HQCs or 400 eHQCs).
+    RATE_HQC = 12.50      # Standard plan, hardware
+    RATE_EHQC = 1.25      # Standard plan, emulator
+    NATIVE_TRIM = 0.85    # ~15% gate reduction from pytket-quantinuum native compile
+
+    print(f"Shot count per config: {args.shots}")
+    print(f"Rates (Azure Standard plan): ${RATE_HQC}/HQC (hardware), "
+          f"${RATE_EHQC}/eHQC (emulator). Native compile trims ~15%.\n")
+    print(f"{'Config':<22} {'qbits':>5} {'n_2q':>7} {'HQC raw':>9} "
+          f"{'  eHQC $':>10}  {'  HQC $':>10}  notes")
+    print("-" * 105)
 
     for label, bits, t, oracle_kind, iterative in configs:
         try:
@@ -123,23 +135,29 @@ def main():
                 continue
             qc, plan, m = built
             gates = count_gates(qc)
-            hqc = hqc_cost(gates, args.shots)
-            usd_lo = hqc * 5
-            usd_med = hqc * 10
-            usd_hi = hqc * 50
+            hqc = hqc_cost(gates, args.shots) * NATIVE_TRIM
             qbits = plan.total_qubits
-            print(f"  {label:<22} {qbits:>5} {gates['n_1q']:>7} "
-                  f"{gates['n_2q']:>7} {gates['n_m']:>5} {hqc:>10,.0f}  "
-                  f"${usd_lo:>9,.0f} / ${usd_med:>9,.0f} / ${usd_hi:>10,.0f}")
+            ehqc_cost = hqc * RATE_EHQC
+            hqc_cost_usd = hqc * RATE_HQC
+            note = ""
+            if ehqc_cost <= 500:
+                note = "fits $500 free (emulator)"
+            elif hqc_cost_usd <= 500:
+                note = "fits $500 free (hw)"
+            print(f"  {label:<22} {qbits:>5} {gates['n_2q']:>7} "
+                  f"{hqc:>9,.0f}  ${ehqc_cost:>9,.2f}  ${hqc_cost_usd:>9,.2f}  {note}")
         except Exception as e:
             print(f"  {label:<22}  ERROR {type(e).__name__}: {str(e)[:50]}")
 
     print()
     print("Notes:")
-    print("- Standard (non-iterative) at m≥10 may need ripple oracle + 30+ qubits.")
-    print("- Iterative QPE saves ~m+t-2 qubits via mid-circuit measure + recycle.")
-    print("- $/HQC rate is non-public; estimates span a wide range. Confirm with")
-    print("  sales@quantinuum.com before committing to runs at m≥8.")
+    print("- Native compile trim = 15% (pytket-quantinuum offline-API benchmark,")
+    print("  2026-05-28; dense oracle gets ~30% reduction, ripple ~13%).")
+    print("- Min-shot study (2026-05-28) shows N=16 sufficient for d-class top-3")
+    print("  on Helios-fidelity emulator — divide above HQC by 64 (1024 / 16)")
+    print("  for the low-shot regime.")
+    print("- Iterative QPE saves qubits but not HQC; m=8+ should use it on")
+    print("  Quantinuum to fit within 56-qubit H2 / 98-qubit Helios capacity.")
 
 
 if __name__ == "__main__":
