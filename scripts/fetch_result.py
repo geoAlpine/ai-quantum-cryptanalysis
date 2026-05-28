@@ -143,9 +143,14 @@ def main(pending_path: str) -> int:
         print(f"  decode time       : {out['elapsed_seconds']:.1f}s")
 
     os.makedirs("results", exist_ok=True)
+    # Include backend + job_id suffix so multiple trials of the same
+    # (bits, t, shots, extractor) don't overwrite each other. Legacy
+    # callers can pass --legacy-path to keep the old name.
     base = f"results/shor_{meta['bits']}bit_t{meta['t']}_{meta['shots']}shots"
-    suffix = "_hnp" if extractor == "hnp" else ""
-    out_path = f"{base}{suffix}_ibm.json"
+    ext_suffix = "_hnp" if extractor == "hnp" else ""
+    backend = meta.get("backend", "unknown")
+    jid_suffix = meta["job_id"][-8:]
+    out_path = f"{base}{ext_suffix}_{backend}_{jid_suffix}.json"
     with open(out_path, "w") as f:
         json.dump({
             **meta,

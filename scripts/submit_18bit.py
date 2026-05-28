@@ -168,8 +168,14 @@ def main():
     print(f"  Job ID: {job.job_id()}  status={job.status()}")
 
     os.makedirs("results", exist_ok=True)
+    # Include backend name + last 8 chars of job_id so multiple submissions
+    # of the same (bits, t, oracle, extractor) combo don't overwrite each
+    # other's pending metadata. The 2026-05-27 Phase 1 reproduction series
+    # hit this overwrite bug — fixed here going forward.
+    jid_suffix = job.job_id()[-8:]
     pending_path = (
-        f"results/_pending_{args.bits}bit_t{args.t}_{oracle_kind}_{args.extractor}_ibm.json"
+        f"results/_pending_{args.bits}bit_t{args.t}_{oracle_kind}_"
+        f"{args.extractor}_{backend.name}_{jid_suffix}.json"
     )
     with open(pending_path, "w") as f:
         json.dump({

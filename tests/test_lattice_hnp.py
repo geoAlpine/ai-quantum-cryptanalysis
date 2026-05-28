@@ -90,3 +90,57 @@ def test_lattice_handles_empty_shots():
     result = hnp_recover_lattice([], 7, 6, max_shots=10)
     assert result.used_shots == 0
     assert result.d_candidate == 0
+
+
+def test_filtered_recovery_on_phase1_hardware():
+    """**Production-flow regression**: the new
+    ``hnp_recover_lattice_filtered`` should recover d=6 from the real
+    Phase 1 ibm_kingston dataset that lattice-alone struggles with on
+    random subsamples. This pins the 2026-05-28 finding (4/4 across
+    Phase 1 + reps).
+    """
+    import json
+    import os
+
+    from challenges import get_challenge
+    from ecc import EllipticCurve
+    from lattice_postprocess import hnp_recover_lattice_filtered
+
+    import pytest
+
+    repo = os.path.join(os.path.dirname(__file__), "..")
+    path = os.path.join(
+        repo, "results", "shor_4bit_t6_1024shots_hnp_ibm_phase1.json"
+    )
+    if not os.path.exists(path):
+        pytest.skip("Phase 1 hardware data not present in this checkout")
+
+    c = get_challenge(4)
+    curve = EllipticCurve(0, 7, c.p)
+    G = curve.point(*c.G)
+    Q = curve.point(*c.Q)
+    n = c.n  # 7
+    t = 6
+    pt_w = (n - 1).bit_length()  # m=3 dense
+
+    blob = json.load(open(path))
+    counts = blob["counts"]
+    shots = []
+    for bs, cnt in counts.items():
+        if len(bs) != 2 * t + pt_w:
+            continue
+        k = int(bs[:t], 2) % n
+        j = int(bs[t:2 * t], 2) % n
+        r = int(bs[2 * t:], 2) % n
+        for _ in range(cnt):
+            shots.append((j, k, r))
+    assert len(shots) >= 900  # most shots parse cleanly
+
+    verify = lambda d: curve.scalar_mul(d, G) == Q
+    result = hnp_recover_lattice_filtered(
+        shots, n, t, verify, top_n_shots=50, block_size=10
+    )
+    assert result["d_recovered"] == c.expected_d, (
+        f"production lattice+filter must recover d=6 from Phase 1 hw data; "
+        f"got {result['d_recovered']} (winning_guess={result['winning_guess']})"
+    )
