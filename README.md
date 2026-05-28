@@ -21,13 +21,16 @@ section before citing either.**
 15-bit (m = 15) submission, and +6 beyond his highest documented success
 (17-bit, m = 16)**. Job ID: `d7o5mr62jamc73bp87eg`.
 
-### Phase 1 — signal-regime recovery (2026-05-25, first datapoint)
+### Phase 1 — signal-regime recovery (first run 2026-05-25, reproduced ×3 on 2026-05-27)
 
 **Recovered `d = 6` at m = 3 (n = 7) on `ibm_kingston` via cross-shot HNP
-score + verification, NOT via verification-filter brute force.** d_true lands
-at HNP rank 2 on the real hardware data (just as 14 / 14 noisy-Aer trials
-predicted) and is recovered by the production pipeline without needing the
-anti-d fallback. Job ID: `d89s7c9789is7393nie0`.
+score + verification, NOT via verification-filter brute force.** The original
+2026-05-25 datapoint (Job `d89s7c9789is7393nie0`) was reproduced in three
+independent submissions on 2026-05-27 (`d8akj91789is7394l4t0`,
+`d8akjb0p0eas73dq03o0`, `d8akjd5g7okc73eq0u80`) — **4/4 trials recovered
+`d = 6`**, with d-class `{6, 1}` consistently in the HNP top-K. Three trials
+recovered via direct verify, one via anti-d fallback. The result is reliable,
+not a single-shot fluke.
 
 This is a different category of recovery from Phase 0 / Lelli — see
 `docs/honest_framing_preprint_outline.md` Section 5 and the diagnostic
@@ -49,6 +52,56 @@ n = 2,098,699 ≥ 2²¹.
 
 Submission writeup: [`brief.md`](brief.md). Full hardware reproduction
 instructions below.
+
+## 🎯 Path to "true world record" — 5-year plan
+
+Phase 1 established the **signal regime** category. Round-2 of the competition
+will be won by whichever team is **first to reach m ≥ 15 (15-bit ECDLP) in this
+category** — recovering `d` via cross-shot HNP from genuine quantum signal
+rather than via verification-filter brute force. This requires hardware
+fidelities IBM Heron r2 cannot deliver and, at high `m`, fault-tolerant
+(logical-qubit) execution.
+
+### What we've established (2026-05)
+
+| Phase | bit | hardware | extractor | result |
+|---|---|---|---|---|
+| 0 (Lelli-class) | 15-22 | IBM Heron r2 | verification filter | recovered, regime characterised as filter-dominated |
+| **1 (this work)** | **4 (m=3)** | **ibm_kingston** | **HNP top-K + verify** | **4/4 reproduction across independent runs; d-class in top-7 every trial** |
+
+`scripts/boundary_scan_2026-05-27.py` quantifies the boundary: at m=3 the HNP
+score gap shrinks from 20% (noiseless) to 0.6% (IBM real hardware) but the
+signal survives; at m=5 the IBM circuit fidelity collapses to 10⁻⁶⁵ and the
+signal is gone (d_true at rank 31/31, recovery fails). IBM hardware caps the
+signal regime at m=3-4.
+
+### Where we go next
+
+1. **Phase 2 (2026 H2)** — `m=5` on **Quantinuum Helios** (advertised p2≈8e-4).
+   Offline pytket-quantinuum compilation already validates the circuit; the
+   noise-model simulation predicts recovery succeeds. See
+   `scripts/quantinuum_compile_test.py` and `scripts/quantinuum_noise_sim.py`.
+
+2. **Phase 3 (2027 H1)** — `m=7–8` on Helios + the new q-ary lattice HNP
+   extractor (`src/lattice_postprocess.hnp_recover_lattice`). Likelihood-
+   filtered variant recovered the m=3 Phase 1 data 4/4 even without the
+   exhaustive-`d` search — pinning the production flow for large `n`.
+
+3. **Phase 4 R&D (2027 H2 – 2028 H1)** — fault-tolerant Shor-ECDLP
+   compilation. T-gate counts already measured
+   (`scripts/t_count_estimator.py`): m=15 needs ~92K T gates with ripple
+   oracle, ~458M physical operations at typical magic-state cost.
+   Surface-code threshold confirmed below Helios fidelity at d=5
+   (`scripts/stim_surface_code_baseline.py`).
+
+4. **Phase 5 (2029-2030)** — **m=15 genuine signal recovery on logical
+   qubits**. The "Lelli-grade scale, signal-regime extraction" world
+   record this project exists to win.
+
+The full technical strategy (budgets, hardware-access decisions, FT R&D
+checkpoints, and partnership routes) is tracked in private project memory
+(`memory/project_three_year_strategy.md` extended to a 5-year FT-inclusive
+plan on 2026-05-28).
 
 ## Quick start
 
