@@ -12,8 +12,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import socket
 import sys
 import time
+
+# Belt-and-braces global timeout — many qiskit-ibm-runtime internals
+# don't honour per-call timeouts. socket.setdefaulttimeout makes any
+# urllib3 / requests call abort instead of hanging indefinitely (the
+# failure mode we hit on 2026-05-28 when IBM Cloud was flaky).
+socket.setdefaulttimeout(20.0)
 
 from quantum_ecc import load_token
 from qiskit_ibm_runtime import QiskitRuntimeService

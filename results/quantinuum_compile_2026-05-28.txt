@@ -1,0 +1,12 @@
+=== Quantinuum H2 native compile vs Qiskit-basis estimate ===
+shots=1024
+
+Config                 qbits gate counts and HQC comparison
+----------------------------------------------------------------------------------------------------
+  Phase 1 (m=3 dense)    qbits=15  Qiskit n_2q=  643 → tket n_2q=  450  HQC   1,561 →   1,091  (save +30.1%)
+  m=5 dense              qbits=21  Qiskit n_2q=16061 → tket n_2q=15805  HQC  38,302 →  37,781  (save +1.4%)
+  m=5 ripple             qbits=31  Qiskit n_2q= 7398 → tket n_2q= 6182  HQC  16,716 →  14,354  (save +14.1%)
+  m=7 ripple             qbits=37  Qiskit n_2q=11194 → tket n_2q= 9468  HQC  25,297 →  21,970  (save +13.2%)
+  m=8 ripple             qbits=41  Qiskit n_2q=14092 → tket n_2q=11951  HQC  31,845 →  27,720  (save +13.0%)
+  m=8 iterative          qbits=23  Qiskit n_2q=13906 → tket n_2q=11855  HQC  31,429 →  27,533  (save +12.4%)
+  m=10 iterative         qbits=27  Qiskit n_2q=20462 → tket n_2q=17499  HQC  46,251 →  40,614  (save +12.2%)
