@@ -163,6 +163,12 @@ def main():
     print()
     print("FT cost = (T × distillation_overhead) + (CNOT × routing_overhead)")
     print("Surface code routing per logical CNOT ≈ 100 phys ops at d=15.")
+    print()
+    print("Empirical finding (2026-05-28): pyzx full_reduce on m=3 ripple")
+    print("saves ~18.7% T-count (8712 → 7084) in ~17 min wall time. Effect")
+    print("on dense oracle is negligible (~0.1%). Probably scales sub-")
+    print("linearly with circuit size — not practical for m≥10 without")
+    print("block-wise optimisation.")
 
 
 if __name__ == "__main__":
