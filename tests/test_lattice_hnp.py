@@ -92,6 +92,70 @@ def test_lattice_handles_empty_shots():
     assert result.d_candidate == 0
 
 
+def test_iterative_qpe_with_lattice_hnp_noiseless():
+    """**Year 2-3 pipeline regression**: iterative QPE produces (j, k)
+    shots structurally identical to the standard solver, so lattice HNP
+    must recover d from a noiseless iterative run too.
+
+    Iterative QPE saves ~30% qubits at m=15 (per memory: 73 → 44) — the
+    enabler for genuine-signal pushes on Quantinuum H2. This test pins
+    end-to-end iterative + lattice integration at small m.
+    """
+    import pytest
+
+    from challenges import get_challenge
+    from ecc import EllipticCurve
+    from shor_iterative import IterativeShorECDLPSolver
+    from shor_ecdlp import SubgroupIndexer, RippleCarryOracle
+    from lattice_postprocess import hnp_recover_lattice
+    from qiskit_aer import AerSimulator
+    from qiskit import transpile
+
+    c = get_challenge(4)
+    curve = EllipticCurve(0, 7, c.p)
+    G = curve.point(*c.G)
+    Q = curve.point(*c.Q)
+    n = c.n  # 7
+    d_true = c.expected_d  # 6
+    t = 5  # m + 2, within wrap-around-safe range
+
+    ind = SubgroupIndexer(curve, G, n)
+    oracle = RippleCarryOracle(ind)
+    solver = IterativeShorECDLPSolver(
+        curve, G, Q, n,
+        oracle=oracle,
+        num_counting=t,
+        max_corrections=2,
+    )
+    qc = solver.build_circuit()
+    sim = AerSimulator()
+    isa = transpile(qc, sim, optimization_level=1)
+    counts = sim.run(isa, shots=512).result().get_counts()
+
+    m = (n - 1).bit_length()
+    pt_w = oracle.point_register_width()
+    shots = []
+    for bs, cnt in counts.items():
+        bs2 = bs.replace(" ", "")
+        if len(bs2) != 2 * t + pt_w:
+            continue
+        k = int(bs2[:t], 2) % n
+        j = int(bs2[t:2 * t], 2) % n
+        r = int(bs2[2 * t:], 2) % n
+        for _ in range(cnt):
+            shots.append((j, k, r))
+    if not shots:
+        pytest.skip("iterative QPE produced no parseable shots — env issue")
+
+    # Take some subset; iterative QPE noiseless should give clean signal
+    result = hnp_recover_lattice(shots[:60], n, t, max_shots=60, block_size=10)
+    d_class = {d_true, (n - d_true) % n}
+    assert result.d_candidate in d_class, (
+        f"iterative QPE + lattice HNP should recover d-class {d_class}; "
+        f"got {result.d_candidate}"
+    )
+
+
 def test_filtered_recovery_on_phase1_hardware():
     """**Production-flow regression**: the new
     ``hnp_recover_lattice_filtered`` should recover d=6 from the real

@@ -23,9 +23,20 @@ from Griffiths-Niu + the existing :class:`RippleCarryOracle` rather than
 import directly, so we have a clean independent implementation for the
 "true world record" track.
 
-Status: initial scaffold. Builds the circuit and runs on noiseless Aer at
-m ≤ 6. Real-hardware deployment needs the backend's ``dynamic_circuits``
-feature enabled.
+**``t`` budget — important**: QPE on a subgroup of order ``n`` extracts
+``log_2(n) ≈ m`` bits of information from ``j`` and ``k``. Setting
+``num_counting > m + 2`` is *not* a bug per se but the higher counting
+bits apply ``U^(2^i)`` whose eigenphases ``2^i (mod n)`` repeat cyclically,
+which collapses the inverse-QFT signature. Empirically, the HNP score
+on the output then concentrates around ``d=0`` (a false noise winner)
+rather than the true ``d``-class. Use ``num_counting = m`` to ``m + 2``,
+and feed the resulting shots into the Ekerå-style ``hnp_recover_lattice``
+post-processor for genuine signal recovery — there is no need to push
+``t`` higher.
+
+Status: scaffold builds + simulates correctly on noiseless Aer (tests
+verify lattice-HNP recovery at m=3). Real-hardware deployment needs
+the backend's ``dynamic_circuits`` feature enabled.
 """
 from __future__ import annotations
 
