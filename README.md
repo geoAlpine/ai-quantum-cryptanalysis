@@ -68,6 +68,7 @@ fidelities IBM Heron r2 cannot deliver and, at high `m`, fault-tolerant
 |---|---|---|---|---|
 | 0 (Lelli-class) | 15-22 | IBM Heron r2 | verification filter | recovered, regime characterised as filter-dominated |
 | **1 (this work)** | **4 (m=3)** | **ibm_kingston** | **HNP top-K + verify** | **4/4 reproduction across independent runs; d-class in top-7 every trial** |
+| **1 — Quantinuum** | **4 (m=3)** | **Quantinuum H2-1 Emulator** | **HNP top-K + verify** | **Recovered d = 6 via HNP rank 1 (anti-d) — 16 shots, 11 min wall, $0 (basic1 plan, 57 of 1000 free eHQC)** |
 
 `scripts/boundary_scan_2026-05-27.py` quantifies the boundary: at m=3 the HNP
 score gap shrinks from 20% (noiseless) to 0.6% (IBM real hardware) but the
