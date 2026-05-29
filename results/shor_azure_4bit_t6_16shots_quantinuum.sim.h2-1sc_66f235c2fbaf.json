@@ -1,0 +1,55 @@
+{
+  "platform": "azure_quantum",
+  "target": "quantinuum.sim.h2-1sc",
+  "job_id": "0667f382-5b0f-11f1-a036-66f235c2fbaf",
+  "bits": 4,
+  "t": 6,
+  "shots": 16,
+  "expected_d": 6,
+  "qubits": 15,
+  "oracle": "dense",
+  "extractor": "hnp",
+  "estimated_hqc_upper": 29.3104,
+  "estimated_cost_upper_usd": 0.0,
+  "rate_per_unit_usd": 0.0,
+  "unit": "free",
+  "shots_parsed": 16,
+  "recovered_d": 6,
+  "success": true,
+  "rank_in_hnp": 2,
+  "verified_via_anti_d": true,
+  "hnp_top_k": [
+    [
+      0,
+      0.0
+    ],
+    [
+      1,
+      0.0
+    ],
+    [
+      2,
+      0.0
+    ],
+    [
+      3,
+      0.0
+    ],
+    [
+      4,
+      0.0
+    ],
+    [
+      5,
+      0.0
+    ],
+    [
+      6,
+      0.0
+    ]
+  ],
+  "unique_outcomes": 1,
+  "counts": {
+    "000000000000000": 16
+  }
+}
