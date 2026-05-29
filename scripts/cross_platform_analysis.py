@@ -144,7 +144,15 @@ def main():
         print(f"    d-class in HNP top-3 : {top3_hit}/{n}")
         print(f"    d-class in HNP top-5 : {top5_hit}/{n}")
         print(f"    d-class in HNP top-7 : {top7_hit}/{n}")
-        print(f"    HNP top-1 winner distribution:")
+        # NOTE: the top-1 winner distribution is reported for the record
+        # only — it is NOT a signal metric. The HNP score is symmetric
+        # under d ↔ anti_d, and on noiseless ground truth anti_d (not
+        # d_true) is the argmax (verified 2026-05-29). "d_true won argmax
+        # k/n" is within-d-class noise. The defensible signal metric is
+        # d-class separation vs the noise plateau — see
+        # scripts/hnp_score_matrix.py.
+        print(f"    HNP top-1 winner distribution (NOT a signal metric — "
+              f"±d degenerate):")
         for d, cnt in top1_counter.most_common():
             print(f"      d={d}: {cnt}/{n}")
 

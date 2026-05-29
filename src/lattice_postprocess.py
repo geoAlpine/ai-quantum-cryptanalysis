@@ -252,6 +252,28 @@ def hnp_score(d: int, shots: list[tuple[int, int, int]],
               n: int, t: int) -> float:
     """Score a candidate ``d`` against shot data via the HNP residual.
 
+    ⚠️ CONVENTION & DEGENERACY (verified 2026-05-29 — read before relying
+    on the argmax):
+
+    * Production callers (``azure_quantum_fetch``, ``cross_platform_analysis``,
+      ``boundary_scan_*``) pass ``j, k`` **reduced mod n** (∈ [0, n)), NOT
+      the full-width registers described below. On noiseless data the
+      full-width form is degenerate (d=0 wins trivially, score monotone in
+      d), so the reduced form is the one that carries signal and the one
+      every pipeline actually uses. The full-width derivation in the rest
+      of this docstring is the *ideal* relation; treat the reduced-input
+      behaviour as the operative one.
+    * The score is symmetric under ``d ↔ (n − d)`` (= anti_d): on noiseless
+      m=3 data BOTH d_true and anti_d sit far below the noise plateau, but
+      **anti_d, not d_true, is the argmax**. The ±d tie is unbreakable by
+      this metric alone. Therefore "argmax == d_true" is NOT a meaningful
+      signal claim — the defensible statistic is whether the d-CLASS
+      {d_true, anti_d} separates from the plateau (see
+      ``scripts/hnp_score_matrix.py`` for the d-class audit anchored to a
+      noiseless ground-truth row). Disambiguation of d_true vs anti_d is
+      done downstream by EC verification, not by this score.
+
+
     After measuring the point register at some ``R_0``, the two-register
     Shor (j, k) state is supported on the lattice
     ``L_d(R_0) = {(jₛ, kₛ) ∈ [0, M)² : jₛ + d·kₛ ≡ R_0 (mod n)}``.
