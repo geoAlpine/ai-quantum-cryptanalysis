@@ -47,10 +47,16 @@ from hnp_score_matrix import (  # noqa: E402
     _scores_np, _best_dc_z_from_scores, parse_shots,
 )
 
-SIM_SEEDS = [1, 7, 42, 123]   # average over independent noisy runs
+SIM_SEEDS = [1, 7, 42]        # average over independent noisy runs
 PERM_SEED = 20260529
 ALPHA = 0.05
-ERR_GRID = [0.0, 0.0003, 0.0006, 0.001, 0.0015, 0.002, 0.003, 0.005, 0.01]
+# The ladder's x-axis is END-TO-END circuit fidelity, so we anchor the sweep to
+# target fidelities and back out the per-gate 2q error from the circuit's cx
+# count (err = 1 - fid**(1/n2q)). This hits the same fidelity points at every m,
+# making rungs directly comparable, and auto-shifts to lower per-gate error for
+# deeper (larger-m) circuits — where a fixed nominal-err grid would sit entirely
+# past the cliff.
+TARGET_FIDS = [1.0, 0.85, 0.70, 0.55, 0.40, 0.25, 0.12, 0.05]
 
 
 def build_circuit_basis(bits, t):
@@ -116,9 +122,13 @@ def main():
     base_sim = AerSimulator()
     isa = transpile(qc, base_sim)
 
+    # err grid anchored to target end-to-end fidelities (see TARGET_FIDS note)
+    err_grid = [0.0] + [round(1 - f ** (1.0 / n2q), 6)
+                        for f in TARGET_FIDS if f < 1.0]
+
     crossed = None
     prev_sig = True
-    for err in ERR_GRID:
+    for err in err_grid:
         zs, ps = [], []
         for s_seed in SIM_SEEDS:
             if err == 0.0:
