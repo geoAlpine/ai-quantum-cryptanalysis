@@ -104,7 +104,9 @@ def main(pending_path: str) -> int:
         print(f"  verified_via_anti_d: {out['verified_via_anti_d']}")
 
     os.makedirs("results", exist_ok=True)
-    jid_suffix = meta["job_id"][-12:].replace("/", "_")
+    # First 8 chars of job_id are the per-job UUID head (unique).
+    # See azure_quantum_submit.py for the same convention.
+    jid_suffix = meta["job_id"][:8].replace("/", "_")
     out_path = (
         f"results/shor_azure_{meta['bits']}bit_t{meta['t']}_"
         f"{meta['shots']}shots_{meta['target']}_{jid_suffix}.json"

@@ -151,7 +151,11 @@ def main():
     print(f"  Job ID: {job_id}")
 
     os.makedirs("results", exist_ok=True)
-    jid_suffix = job_id[-12:].replace("/", "_")
+    # Use the FIRST 8 chars of the job_id — Azure Quantum job IDs end
+    # with a workspace/region tag that is shared across all jobs from
+    # the same workspace, so a last-N suffix collides. The first 8 are
+    # the per-job UUID head and are guaranteed unique.
+    jid_suffix = job_id[:8].replace("/", "_")
     pending_path = (
         f"results/_pending_azure_{args.bits}bit_t{args.t}_{oracle_kind}_"
         f"{args.extractor}_{args.target}_{jid_suffix}.json"
