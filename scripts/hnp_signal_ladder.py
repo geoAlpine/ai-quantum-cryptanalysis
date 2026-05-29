@@ -3,44 +3,42 @@
 The project's strategic moat (see memory three-year-genuine-record-strategy):
 draw the signal-vs-noise boundary for collective HNP recovery, so that a real
 hardware datapoint can be *placed* on a first-principles curve rather than
-asserted in isolation.
+asserted in isolation. Now parameterised over m so the ladder can be drawn at
+each rung of the roadmap (m=3 done on hardware; m=5+ explored here in sim).
 
-This tool is fully OFFLINE and FREE — no QPU/emulator quota. It takes the exact
-m=3 dense Phase 1 circuit, injects a two-qubit depolarizing error at a grid of
-rates, simulates 230 shots (matching the real H2-1E run), and runs the SAME
-permutation test as hnp_score_matrix.py (statistic = best-dc z; null = shuffle
-k vs j). The output is the noise level at which p crosses 0.05 — i.e. where a
-genuine collective signal stops being detectable.
+Fully OFFLINE and FREE — no QPU/emulator quota. Takes the dense Phase-X circuit
+for the chosen m, injects a 2q depolarizing error at a grid of rates, simulates
+SHOTS shots (a few seeds averaged), and runs the SAME permutation test as
+hnp_score_matrix.py (statistic = best-dc z; null = shuffle k vs j). Output: the
+noise level at which p crosses 0.05 — where genuine collective signal dies.
 
-It brackets the real measurements (noiseless = strong signal positive control;
-real H2-1E 230sh p≈0.019 = signal; real IBM 4096sh p≈0.61 = none) and shows the
-SHAPE of the signal-vs-noise boundary as a function of END-TO-END circuit
-fidelity.
+STATISTIC: uses the squared-residual score (_scores_np), the robust cross-m
+default. (The likelihood score is more powerful at m=3 but FAILS at m=5 — see
+_nll_scores_np docstring — so it is deliberately not used for the ladder.)
 
-IMPORTANT (learned 2026-05-29): pure depolarizing noise is BENIGN — the
-collective signal survives to ~3-12% end-to-end circuit fidelity, i.e. even at
-IBM's *nominal* 2q error (~0.2%) a depolarizing-only model still shows signal.
-So a platform is NOT placed on this ladder by its nominal per-gate rate but by
-its EFFECTIVE circuit fidelity. IBM's effective fidelity (~2e-3) is crushed far
-past the cliff by SWAP overhead (limited connectivity inflates 643→~1243 2q
-gates) plus coherent/readout/crosstalk noise; Quantinuum's all-to-all
-connectivity (no SWAPs) keeps its effective fidelity before the cliff. THAT —
-end-to-end fidelity, not nominal 2q rate — is why H2 carries the signal and IBM
-does not.
-
-CAVEAT: a single depolarizing channel on cx is illustrative of the boundary
-SHAPE only; it is far kinder than real device noise, so do NOT read platform
-placement off the nominal-err column. The authoritative per-platform verdicts
-remain the real-data permutation tests in hnp_score_matrix.py.
+CAVEATs:
+  * A single depolarizing channel on cx is BENIGN vs real device noise — the
+    signal survives to much lower *nominal* per-gate error than a real device
+    would tolerate. Read the boundary by END-TO-END circuit fidelity, not the
+    nominal 2q rate; place a platform by its EFFECTIVE fidelity (after SWAP
+    overhead + coherent/readout/crosstalk noise). The m=3 rung calibrated this:
+    real IBM (eff fid ≈2e-3) sits past the cliff (measured p≈0.61) while
+    Quantinuum H2-1E (all-to-all, high eff fid) sits before it (measured
+    p≈0.019). The ladder shows the boundary SHAPE; real-data permutation tests
+    in hnp_score_matrix.py remain the authoritative per-platform verdicts.
+  * t must be the sweet spot t≈m+3 (M/n≈8): too small starves the signal,
+    too large hits the controlled-add wrap-around. m=3→t=6, m=5→t=8.
 
 Usage:
-    PYTHONPATH=src python scripts/hnp_signal_ladder.py
-    PYTHONPATH=src python scripts/hnp_signal_ladder.py 2000   # n_perm
+    PYTHONPATH=src python scripts/hnp_signal_ladder.py                  # m=3
+    PYTHONPATH=src python scripts/hnp_signal_ladder.py 1200 6 8 768     # m=5
+    # args: n_perm  bits  t  shots
 """
 from __future__ import annotations
 
 import os
 import sys
+import time
 
 import numpy as np
 
@@ -49,31 +47,31 @@ from hnp_score_matrix import (  # noqa: E402
     _scores_np, _best_dc_z_from_scores, parse_shots,
 )
 
-SHOTS = 230            # match the real H2-1E genuine-signal run
-SIM_SEEDS = [1, 7, 42, 123, 2026]  # average over independent noisy runs
+SIM_SEEDS = [1, 7, 42, 123]   # average over independent noisy runs
 PERM_SEED = 20260529
 ALPHA = 0.05
-# Two-qubit depolarizing rates to sweep. 0 = noiseless positive control;
-# ~0.001 ≈ high-fidelity trapped-ion class; ~0.002+ ≈ IBM superconducting class.
 ERR_GRID = [0.0, 0.0003, 0.0006, 0.001, 0.0015, 0.002, 0.003, 0.005, 0.01]
 
 
-def build_circuit_basis():
+def build_circuit_basis(bits, t):
+    """Transpile the dense circuit to [u3, cx] ONCE (expensive for larger m;
+    reused across every noise level)."""
     from challenges import get_challenge
     from ecc import EllipticCurve
     from shor_ecdlp import (ShorECDLPSolver, SubgroupIndexer,
                             DenseUnitaryOracle)
     from qiskit import transpile
-    c = get_challenge(4)
+    c = get_challenge(bits)
     curve = EllipticCurve(0, 7, c.p)
     G, Q = curve.point(*c.G), curve.point(*c.Q)
-    n, d_true, t = c.n, c.expected_d, 6
+    n, d_true = c.n, c.expected_d
+    m = max(1, (n - 1).bit_length())
     ind = SubgroupIndexer(curve, G, n)
     solver = ShorECDLPSolver(curve, G, Q, n,
                              oracle=DenseUnitaryOracle(ind), num_counting=t)
     qc = transpile(solver.build_circuit(), basis_gates=["u3", "cx"],
                    optimization_level=1)
-    return qc, n, t, d_true
+    return qc, n, t, d_true, m
 
 
 def perm_test(j, k, n, t, dc, n_perm, seed):
@@ -88,21 +86,35 @@ def perm_test(j, k, n, t, dc, n_perm, seed):
 
 def main():
     n_perm = int(sys.argv[1]) if len(sys.argv) > 1 else 1500
+    bits = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+    t = int(sys.argv[3]) if len(sys.argv) > 3 else 6
+    shots = int(sys.argv[4]) if len(sys.argv) > 4 else 230
+
     from qiskit import transpile
     from qiskit_aer import AerSimulator
     from qiskit_aer.noise import NoiseModel, depolarizing_error
 
-    qc, n, t, d_true = build_circuit_basis()
+    print(f"building m circuit (bits={bits}, t={t}) — transpiling once...")
+    t0 = time.time()
+    qc, n, t, d_true, m = build_circuit_basis(bits, t)
     n2q = qc.count_ops().get("cx", 0)
     dc = {d_true, (n - d_true) % n}
-    print(f"HNP Signal Ladder — m=3 dense, {SHOTS} shots, {n2q} cx gates, "
-          f"n_perm={n_perm}")
-    print(f"(2q depolarizing sweep; statistic best-dc z; null shuffles k vs j; "
-          f"α={ALPHA})\n")
-    print(f"  (each row averages {len(SIM_SEEDS)} independent noisy runs)\n")
+    pt_w = m  # dense oracle
+    print(f"  built in {time.time()-t0:.0f}s: m={m}, n={n}, d_true={d_true}, "
+          f"d-class={sorted(dc)}, {qc.num_qubits} qubits, {n2q} cx, "
+          f"M/n={(1<<t)/n:.1f}")
+    print(f"\nHNP Signal Ladder — m={m} dense, {shots} shots, n_perm={n_perm}, "
+          f"{len(SIM_SEEDS)} seeds/row")
+    print(f"(2q depolarizing sweep; squared-residual best-dc z; "
+          f"null shuffles k vs j; α={ALPHA})\n")
     print(f"  {'2q_err':>8} {'circ_fid≈':>10} {'mean_z':>8} {'mean_p':>8} "
           f"{'power':>6}  signal?   note")
     print("-" * 78)
+
+    # pre-transpile to the simulator basis once (qc is already [u3,cx]; this is
+    # cheap and lets every noisy run reuse the same compiled circuit)
+    base_sim = AerSimulator()
+    isa = transpile(qc, base_sim)
 
     crossed = None
     prev_sig = True
@@ -115,15 +127,14 @@ def main():
                 nm = NoiseModel()
                 nm.add_all_qubit_quantum_error(depolarizing_error(err, 2),
                                                ["cx"])
-                # light 1q term so it isn't purely 2q-dominated
                 nm.add_all_qubit_quantum_error(depolarizing_error(err / 10, 1),
                                                ["u3"])
                 sim = AerSimulator(noise_model=nm)
-            counts = sim.run(transpile(qc, sim), shots=SHOTS,
+            counts = sim.run(isa, shots=shots,
                              seed_simulator=s_seed).result().get_counts()
-            shots = parse_shots(counts, t, 3, n)
-            j = np.array([s[0] for s in shots])
-            k = np.array([s[1] for s in shots])
+            sh = parse_shots(counts, t, pt_w, n)
+            j = np.array([s[0] for s in sh])
+            k = np.array([s[1] for s in sh])
             obs, p = perm_test(j, k, n, t, dc, n_perm, PERM_SEED)
             zs.append(obs)
             ps.append(p)
@@ -143,36 +154,27 @@ def main():
     print()
     if crossed:
         fid_cliff = (1 - crossed) ** n2q
-        print(f"  → signal cliff: genuine d-class signal dies around "
+        print(f"  → m={m} signal cliff: genuine d-class signal dies around "
               f"2q_err ≈ {crossed:.4f}  (end-to-end circuit fidelity ≈ "
               f"{fid_cliff:.1%})")
+    else:
+        print(f"  → m={m}: signal present (or absent) across the whole grid — "
+              f"no clean crossing found; widen ERR_GRID.")
 
-    print("\n  HOW TO READ THIS (important, honest):")
-    print("  The right axis is END-TO-END circuit fidelity, NOT the nominal")
-    print("  per-gate rate. Pure depolarizing noise is BENIGN — the signal here")
-    print("  survives to ~3-12% circuit fidelity. So a device's nominal 2q")
-    print("  error does NOT place it on this ladder; its *effective* fidelity")
-    print("  (after SWAP overhead + coherent/readout/crosstalk noise) does.")
-    print()
-    print("  Placing the REAL measurements by effective fidelity:")
-    print("    • Quantinuum H2-1E : all-to-all (~702 native 2q, no SWAP), high")
-    print("      per-gate fidelity → effective fid lands BEFORE the cliff →")
-    print("      p≈0.019 measured (signal). Matches the ~0.25-0.5-fid rows here.")
-    print("    • IBM ibm_kingston : limited connectivity inflates 643→~1243 2q")
-    print("      via SWAPs, plus non-depolarizing noise → real est-fid ≈ 2e-3,")
-    print("      FAR past the cliff → p≈0.61 measured (no signal).")
-    print()
-    print("  KEY INSIGHT: the IBM-vs-H2 gap is NOT the nominal 2q rate (at which")
-    print("  depolarizing still shows signal) — it is END-TO-END fidelity, which")
-    print("  SWAP overhead + real (non-depolarizing) noise crush on IBM. That is")
-    print("  why a trapped-ion machine carries the collective signal and a")
-    print("  superconducting one of similar nominal 2q error does not.")
-    print()
-    print("  CAVEAT: depolarizing-only is illustrative of the boundary SHAPE; it")
-    print("  is benign vs real noise, so do not read platform placement off the")
-    print("  nominal-err column. Authoritative per-platform verdicts are the")
-    print("  real-data permutation tests in hnp_score_matrix.py (H2 p≈0.019,")
-    print("  IBM p≈0.61).")
+    print("\n  HOW TO READ (honest): pure depolarizing is BENIGN, so the cliff")
+    print("  in NOMINAL 2q error is far kinder than a real device. Place a")
+    print("  platform by its EFFECTIVE end-to-end fidelity (SWAP overhead + real")
+    print("  noise), not its nominal 2q rate. The m=3 rung was calibrated to")
+    print("  real data: IBM (eff fid ≈2e-3) past the cliff (p≈0.61), Quantinuum")
+    print("  H2-1E (all-to-all, high eff fid) before it (p≈0.019).")
+    if m >= 5:
+        print(f"\n  m={m} READ-OUT: this extends the ladder one roadmap rung up.")
+        print(f"  The end-to-end fidelity at this cliff is the TARGET a real m={m}")
+        print(f"  device must beat to carry genuine signal — directly sizing the")
+        print(f"  fidelity/qubit/shot budget for the next paid hardware run.")
+    print("\n  CAVEAT: depolarizing shows boundary SHAPE only. Authoritative")
+    print("  per-platform verdicts are real-data permutation tests in")
+    print("  hnp_score_matrix.py.")
 
 
 if __name__ == "__main__":
