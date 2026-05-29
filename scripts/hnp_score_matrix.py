@@ -194,11 +194,21 @@ def _nll_scores_np(j, k, n, t, sigma=None):
     the n expected peaks (the numpy/vectorised twin of
     lattice_postprocess.hnp_score_likelihood). σ is fixed a-priori to the
     ideal-peak rounding width M/(2n) — NOT tuned to the data, so this is
-    not a fitted/p-hacked statistic. Validated 2026-05-29 to be markedly
-    more powerful than the squared-residual score on real signal (H2-1E
-    230-shot p 0.02→0.0002, power@128 0.45→0.97) while staying null on the
-    IBM negative control (p≈0.65) — i.e. more sensitive, not more prone to
-    false positives. Lower NLL at a d = better fit = more signal there."""
+    not a fitted/p-hacked statistic. At m=3 it is markedly more powerful
+    than the squared-residual score on real signal (H2-1E 230-shot p
+    0.02→0.0002, power@128 0.45→0.97) while staying null on the IBM
+    negative control (p≈0.65) — more sensitive, not more false-positive
+    prone. Lower NLL at a d = better fit = more signal there.
+
+    ⚠️ m-DEPENDENT (verified 2026-05-29 by noiseless sim): this power
+    advantage is m=3-SPECIFIC. At m=5 (n=31, t=8) the likelihood FAILS
+    (noiseless p≈0.43) while the squared-residual score DETECTS the
+    d-class (p≈0.003) — because σ=M/(2n) is ~half the peak spacing, so for
+    larger n the Gaussian mixture's peaks overlap and wash out. Use the
+    SQUARED score (_scores_np) as the robust cross-m default; treat the
+    likelihood as an m=3-validated booster, not a universal upgrade. A
+    narrower σ may rescue it at larger m but that needs its own
+    validation (and risks σ-tuning)."""
     M = 1 << t
     peaks = np.array(sorted({(s * M + n // 2) // n % M for s in range(n)}))
     half = M // 2
