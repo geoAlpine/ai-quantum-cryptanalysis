@@ -34,14 +34,12 @@ def find_datasets():
     ]:
         if os.path.exists(path):
             out.append((label, "ibm_kingston", path))
-    # Quantinuum H2-1E series (any matching pattern)
-    for path in sorted(glob.glob("results/shor_azure_4bit_t6_*shots_quantinuum.sim.h2-1e_*.json")):
-        # Skip syntax checker results
-        if "h2-1sc" in path:
-            continue
-        # Label by job-id suffix
-        jid = path.split("_")[-1].replace(".json", "")[:8]
-        out.append((f"H2-1E {jid}", "quantinuum_h2-1e", path))
+    # Quantinuum H2-1E series — two filename formats coexist:
+    #   shor_4bit_t6_16shots_hnp_h2-1e_<label>.json  (clean, post-2026-05-29)
+    #   shor_azure_4bit_t6_*shots_quantinuum.sim.h2-1e_*.json  (legacy)
+    for path in sorted(glob.glob("results/shor_4bit_t6_16shots_hnp_h2-1e_*.json")):
+        label = path.split("_h2-1e_")[-1].replace(".json", "")
+        out.append((f"H2 {label}", "quantinuum_h2-1e", path))
     return out
 
 
