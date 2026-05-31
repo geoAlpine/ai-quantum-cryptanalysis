@@ -13,19 +13,20 @@
 > implementation status and the v2/v3 honest framing. All hardware
 > results and IBM Job IDs documented below remain valid.
 >
-> **Note (2026-05-25, Phase 1 hardware datapoint).** Since this writeup, we
-> have **submitted and recovered a separate hardware datapoint in a
-> qualitatively different recovery category**: 4-bit (m = 3) on
-> `ibm_kingston`, Job ID `d89s7c9789is7393nie0`, decoded via the
-> production HNP+verify pipeline rather than the verification-filter
-> brute force used in the 22-bit headline (and in Lelli's 15-bit
-> Round-1 winner). The recovered `d = 6` lands at HNP score rank 2 with
-> direct verification — exactly as the 14 / 14 noisy-Aer trials
-> predicted. See `README.md` § "Phase 1 — signal-regime recovery" and
-> `docs/honest_framing_preprint_outline.md` § 5.5 for the new result.
-> The 22-bit headline below remains the **scale** record; the Phase 1
-> recovery is a **methodology** datapoint that the field has not had
-> before.
+> **Note (2026-05, Phase 1 — corrected framing).** Since this writeup we
+> developed a **statistical test** (permutation test on HNP d-class
+> separation) that distinguishes genuine collective quantum signal from
+> verification-filter recovery — and recovering `d` or its HNP rank is
+> NOT that test (the score is ±d-symmetric). Applying it: the m=3 IBM
+> `ibm_kingston` run (Job `d89s7c9789is7393nie0`) is **verification-filter
+> regime** (pooled p≈0.61), the same category as the 22-bit headline and
+> Lelli's Round-1 winner. The first datapoint to pass the test — genuine
+> d-class signal — is on the **Quantinuum H2-1 emulator** (m=3, p≈0.0003),
+> with IBM as a negative control; across four platforms the signal tracks
+> end-to-end fidelity (emulator scope, not yet physical QPU). See the
+> README "Phase 1 — genuine collective signal" section and
+> `scripts/hnp_score_matrix.py`. The 22-bit headline below remains the
+> **scale** record (verification-filter regime).
 
 > **Headline result.** A **22-bit (m = 22)** elliptic-curve discrete-log private
 > key (`d = 1,999,171`) was recovered from a quantum-hardware run on `ibm_fez`
