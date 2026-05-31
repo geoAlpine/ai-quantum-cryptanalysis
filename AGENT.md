@@ -1,5 +1,12 @@
 # AGENT.md — Autonomous AI Cryptanalysis Record
 
+> **Note:** This is a point-in-time *workflow log*; phrases like "world-record
+> attempt" / "first m=19 recovery" reflect the framing at the time and are NOT
+> current claims. The corrected scientific framing — Phase 0 and the m=19/22
+> runs are verification-filter regime; the genuine collective-signal datapoint
+> is the Quantinuum H2-1 emulator (p≈0.0003) with IBM as a negative control
+> (p≈0.61) — is in the [README](README.md) and `scripts/hnp_score_matrix.py`.
+
 This repository was **designed, implemented, executed, and analyzed by an AI agent
 (Claude Code, an instance of Anthropic's Claude Sonnet 4.6 model)** working with
 minimal human direction.

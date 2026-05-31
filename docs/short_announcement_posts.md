@@ -1,3 +1,7 @@
+> ⚠️ **補正 (2026-05) / Correction.** この文書中の「Phase 1 = signal-regime recovery on IBM」「d_true が HNP rank で当たる＝signal」という記述は**誤り**です。permutation 検定の結果、IBM m=3 は **verification-filter regime (p≈0.61)**、genuine な d-class signal は **Quantinuum H2-1 emulator (p≈0.0003)** でのみ確認され、IBM は陰性対照です（4機種で signal は end-to-end 忠実度に追従）。最新かつ正確な枠組みは [README](../README.md) と `scripts/hnp_score_matrix.py` を参照してください。
+
+---
+
 # Short-form announcements for Phase 1
 
 Drafts to copy-paste into LinkedIn / X / Hacker News.

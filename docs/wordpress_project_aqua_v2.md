@@ -1,3 +1,7 @@
+> ⚠️ **補正 (2026-05) / Correction.** 本文書の「Phase 1 = signal-regime recovery on IBM」「d_true の HNP rank = signal」は**誤り**です。IBM m=3 は verification-filter regime (permutation p≈0.61)、genuine signal は Quantinuum H2-1 emulator (p≈0.0003) のみ（IBM は陰性対照）。正確な枠組みは [README](../README.md) と `scripts/hnp_score_matrix.py` 参照。
+
+---
+
 # Project AQUA：2 回目の検証 — 検証フィルタを超えて、IBM 実機で「真の量子シグナル」から暗号鍵を復元
 
 *GeoAlpine LLC（ジオアルピーヌ合同会社） — 2026 年 5 月 25 日*
