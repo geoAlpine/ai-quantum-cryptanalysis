@@ -1,9 +1,12 @@
 # quantum-ecc
 
 > Autonomous AI-driven cryptanalysis of the Elliptic Curve Discrete Logarithm
-> Problem (ECDLP) on IBM Quantum hardware. Built end-to-end by an LLM agent
-> (Anthropic Claude Sonnet 4.6 via Claude Code) — see [`AGENT.md`](AGENT.md)
-> for the workflow record.
+> Problem (ECDLP) on quantum hardware (IBM, Quantinuum, IonQ). Beyond recovering
+> keys via the verification filter, this project defines a **statistical test for
+> genuine collective quantum signal** (permutation test on HNP d-class
+> separation) and reports the first datapoint that passes it — on the Quantinuum
+> H2-1 emulator, with IBM as a negative control. Built end-to-end by an LLM agent
+> (Anthropic Claude via Claude Code) — see [`AGENT.md`](AGENT.md).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Quantum: IBM Heron r2](https://img.shields.io/badge/Quantum-IBM_Heron_r2-blueviolet.svg)](https://www.ibm.com/quantum)
@@ -21,20 +24,38 @@ section before citing either.**
 15-bit (m = 15) submission, and +6 beyond his highest documented success
 (17-bit, m = 16)**. Job ID: `d7o5mr62jamc73bp87eg`.
 
-### Phase 1 — signal-regime recovery (first run 2026-05-25, reproduced ×3 on 2026-05-27)
+### Phase 1 — genuine collective signal, on the right hardware (2026-05)
 
-**Recovered `d = 6` at m = 3 (n = 7) on `ibm_kingston` via cross-shot HNP
-score + verification, NOT via verification-filter brute force.** The original
-2026-05-25 datapoint (Job `d89s7c9789is7393nie0`) was reproduced in three
-independent submissions on 2026-05-27 (`d8akj91789is7394l4t0`,
-`d8akjb0p0eas73dq03o0`, `d8akjd5g7okc73eq0u80`) — **4/4 trials recovered
-`d = 6`**, with d-class `{6, 1}` consistently in the HNP top-K. Three trials
-recovered via direct verify, one via anti-d fallback. The result is reliable,
-not a single-shot fluke.
+**The defensible signal claim is statistical, and platform-dependent. The
+test:** the HNP collective recovery distinguishes itself from verification-
+filter brute force only if the d-class `{d_true, anti_d}` separates from the
+noise plateau by *more than chance* — a permutation test (shuffle each shot's
+`k` against its `j`, recompute the d-class statistic, p = P(null ≥ observed))
+makes this precise. Recovering `d` (or its HNP rank) is **not** the test; the
+±d-symmetric score cannot even pick `d_true` over `anti_d` on noiseless data.
+Significance is the test.
 
-This is a different category of recovery from Phase 0 / Lelli — see
-`docs/honest_framing_preprint_outline.md` Section 5 and the diagnostic
-section below for what the distinction means.
+Applying that test (2026-05):
+
+- **IBM `ibm_kingston` (m = 3, 4×1024 shots pooled): p ≈ 0.61 — no genuine
+  signal.** Recovery of `d = 6` there is real but lives in the **same
+  verification-filter regime as Phase 0 / Lelli** (top-K candidates × EC
+  verify, with n = 7 making the verify exhaustive). The earlier
+  "signal-regime on IBM" framing was an over-claim; corrected here.
+- **Quantinuum H2-1 Emulator (m = 3, 230 shots): p ≈ 0.0003 — genuine
+  d-class signal.** Same circuit, same analysis; the collective signal is
+  statistically significant well below the verification-filter floor. This is
+  the first "beyond verification filter" datapoint.
+- **Cross-platform (4 platforms): signal strength tracks end-to-end circuit
+  fidelity** — Quantinuum H2 (signal) → IonQ Forte (borderline) → IonQ Aria
+  (none) → IBM (none) — evidence it is a genuine fidelity-dependent quantum
+  phenomenon, not a platform artifact.
+
+**Scope (read before citing):** the H2-1 result is on the *emulator* (a
+realistic noise model), not yet the physical QPU; it is a single m = 3 run.
+Removing the "emulator" caveat (a real-QPU run) is the next milestone. See the
+diagnostic section below and `scripts/hnp_score_matrix.py` (the authoritative
+permutation-test tool) for the full evidence.
 
 | Submission | label | m | qubits | 2Q gates | Recovered d | Decode mode | Job |
 |---|---|---|---|---|---|---|---|
@@ -55,26 +76,30 @@ instructions below.
 
 ## 🎯 Path to "true world record" — 5-year plan
 
-Phase 1 established the **signal regime** category. Round-2 of the competition
-will be won by whichever team is **first to reach m ≥ 15 (15-bit ECDLP) in this
-category** — recovering `d` via cross-shot HNP from genuine quantum signal
-rather than via verification-filter brute force. This requires hardware
-fidelities IBM Heron r2 cannot deliver and, at high `m`, fault-tolerant
+Phase 1 established the **signal-regime test** (a permutation test for genuine
+collective signal) and the first datapoint that passes it (Quantinuum H2-1
+Emulator). Round-2 of the competition will be won by whichever team is **first
+to reach m ≥ 15 (15-bit ECDLP) with a statistically significant collective
+signal** — not merely recovering `d` via the verification filter. This requires
+hardware fidelities IBM Heron r2 cannot deliver and, at high `m`, fault-tolerant
 (logical-qubit) execution.
 
-### What we've established (2026-05)
+### What we've established (2026-05), by the permutation test
 
-| Phase | bit | hardware | extractor | result |
-|---|---|---|---|---|
-| 0 (Lelli-class) | 15-22 | IBM Heron r2 | verification filter | recovered, regime characterised as filter-dominated |
-| **1 (this work)** | **4 (m=3)** | **ibm_kingston** | **HNP top-K + verify** | **4/4 reproduction across independent runs; d-class in top-7 every trial** |
-| **1 — Quantinuum** | **4 (m=3)** | **Quantinuum H2-1 Emulator** | **HNP top-K + verify** | **Recovered d = 6 via HNP rank 1 (anti-d) — 16 shots, 11 min wall, $0 (basic1 plan, 57 of 1000 free eHQC)** |
+| Platform (m=3) | shots | permutation p | verdict |
+|---|---|---|---|
+| Noiseless (ground truth) | 4096 | ≈ 0.0003 | signal (calibrates the test) |
+| IBM `ibm_kingston` | 4096 | ≈ 0.61 | **no signal — verification-filter regime** |
+| **Quantinuum H2-1 Emulator** | **230** | **≈ 0.0003** | **genuine d-class signal** |
+| IonQ Forte (noise model) | 1024 | ≈ 0.065 | borderline (not significant) |
+| IonQ Aria (noise model) | 1024 | ≈ 0.71 | no signal |
 
-`scripts/boundary_scan_2026-05-27.py` quantifies the boundary: at m=3 the HNP
-score gap shrinks from 20% (noiseless) to 0.6% (IBM real hardware) but the
-signal survives; at m=5 the IBM circuit fidelity collapses to 10⁻⁶⁵ and the
-signal is gone (d_true at rank 31/31, recovery fails). IBM hardware caps the
-signal regime at m=3-4.
+Phase 0 (m = 15–22, IBM) is likewise verification-filter regime (see the
+diagnostic section). `scripts/hnp_score_matrix.py` reproduces this table;
+`scripts/hnp_signal_ladder.py` maps the noise-vs-signal boundary, which the
+five platforms above track by end-to-end circuit fidelity. The signal regime is
+currently reachable only on the highest-fidelity hardware (Quantinuum H2 class);
+IBM's superconducting fidelity (SWAP-inflated 2Q count) sits past the cliff.
 
 ### Where we go next
 
@@ -144,7 +169,7 @@ print(f'recovered d = {solver.extract(counts)}')  # → 1999171
 "
 ```
 
-## Reproducing the Phase 1 signal-regime recovery
+## Reproducing the Phase 1 recovery (IBM — verification-filter regime)
 
 ```bash
 # 1. Submit (uses ≈ 20 s of IBM open-plan free QPU)
@@ -164,14 +189,18 @@ python scripts/plot_hnp_distribution.py \
 Re-running our actual submission (`d89s7c9789is7393nie0`) produces:
 
 - HNP rank 1: `d = 4` (noise, fails `4·G == Q`)
-- HNP rank 2: `d = 6` ← **`d_true`, verification succeeds**
+- HNP rank 2: `d = 6` ← `d_true`, verification succeeds
 - HNP rank 3: `d = 1` (anti-d partner, would have rescued if rank 2 had failed)
 - decode time: ≈ 0 s
 
-![Phase 1 diagnostic plot](results/shor_4bit_t6_1024shots_hnp_ibm.png)
+**This recovers `d`, but it is NOT evidence of genuine signal.** The HNP rank is
+±d-symmetric and the EC verify is exhaustive at n = 7, so this is
+verification-filter recovery — the permutation test on the pooled IBM data
+returns p ≈ 0.61 (no collective signal). The genuine-signal datapoint is the
+Quantinuum H2-1 Emulator run (p ≈ 0.0003); run `scripts/hnp_score_matrix.py` for
+the side-by-side. The argmax/rank is reported here only for reproduction.
 
-For the noisy-Aer prediction that matched this, see
-`docs/deepening_findings_2026-05-25.md` and the 14 / 14 sweep results.
+![Phase 1 diagnostic plot](results/shor_4bit_t6_1024shots_hnp_ibm.png)
 
 ## Diagnostic: was this *actually* quantum signal, or verification filter?
 
